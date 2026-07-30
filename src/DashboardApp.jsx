@@ -128,6 +128,38 @@ function todayStr() {
   return d.toISOString().slice(0, 10);
 }
 
+// Returns the Monday (YYYY-MM-DD) of the week containing the given date string.
+function weekStart(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay(); // 0 = Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+// key used to group entries by period
+function periodKey(dateStr, mode) {
+  if (mode === "monthly") return dateStr.slice(0, 7); // YYYY-MM
+  if (mode === "weekly") return weekStart(dateStr);
+  return dateStr; // daily
+}
+
+function periodLabel(key, mode) {
+  if (mode === "monthly") {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  }
+  if (mode === "weekly") {
+    const start = new Date(key + "T00:00:00");
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    const startLabel = start.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const endLabel = end.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return `${startLabel} – ${endLabel}`;
+  }
+  return new Date(key + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function App() {
   const [dishes, setDishes] = useState(DEFAULT_DISHES);
   const [zones, setZones] = useState(DEFAULT_ZONES);
@@ -708,12 +740,82 @@ function Delivery({ zones, updateZone, deleteZone, addZone }) {
   );
 }
 
+function PeriodCard({ period }) {
+  const [open, setOpen] = useState(false);
+  const tone = period.net >= 0 ? COLORS.green : COLORS.rust;
+  return (
+    <div className="mb-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.border}` }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 flex-wrap gap-y-1 text-left"
+        style={{ background: COLORS.goldFaint }}
+      >
+        <div className="flex items-center gap-2">
+          <span style={{ color: COLORS.gold, fontSize: 11, transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>▶</span>
+          <span style={{ fontFamily: "Cormorant Garamond", fontWeight: 700, fontSize: 18, color: COLORS.maroonDark }}>{period.label}</span>
+        </div>
+        <div style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: COLORS.maroonDark }}>
+          {period.totals.items} items · Rs {fmt(period.totals.revenue)} revenue
+        </div>
+      </button>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: COLORS.border }}>
+        <div className="p-3" style={{ background: COLORS.surface }}>
+          <div style={{ fontSize: 11, color: COLORS.inkSoft }}>Items sold</div>
+          <div style={{ fontFamily: "IBM Plex Mono", fontSize: 15, fontWeight: 600 }}>{period.totals.items}</div>
+        </div>
+        <div className="p-3" style={{ background: COLORS.surface }}>
+          <div style={{ fontSize: 11, color: COLORS.inkSoft }}>Revenue</div>
+          <div style={{ fontFamily: "IBM Plex Mono", fontSize: 15, fontWeight: 600 }}>Rs {fmt(period.totals.revenue)}</div>
+        </div>
+        <div className="p-3" style={{ background: COLORS.surface }}>
+          <div style={{ fontSize: 11, color: COLORS.inkSoft }}>Expenses</div>
+          <div style={{ fontFamily: "IBM Plex Mono", fontSize: 15, fontWeight: 600, color: COLORS.rust }}>Rs {fmt(period.expenseTotal)}</div>
+        </div>
+        <div className="p-3" style={{ background: COLORS.surface }}>
+          <div style={{ fontSize: 11, color: COLORS.inkSoft }}>Net profit</div>
+          <div style={{ fontFamily: "IBM Plex Mono", fontSize: 15, fontWeight: 700, color: tone }}>Rs {fmt(period.net)}</div>
+        </div>
+      </div>
+
+      {open && (
+        <div style={{ background: COLORS.bg, padding: "12px 16px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.maroon, marginBottom: 8 }}>Dish-wise breakdown</div>
+          {period.dishBreakdown.length === 0 ? (
+            <div style={{ fontSize: 12, color: COLORS.inkSoft }}>No sales this period.</div>
+          ) : (
+            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto" }}>
+              <div style={{ minWidth: 460 }}>
+                <div className="grid text-xs font-semibold px-3 py-2" style={{ gridTemplateColumns: "2fr 0.7fr 1fr 1fr", background: COLORS.goldFaint, color: COLORS.maroonDark }}>
+                  <div>Dish · Option</div>
+                  <div>Qty</div>
+                  <div>Revenue</div>
+                  <div>Profit</div>
+                </div>
+                {period.dishBreakdown.map((row) => (
+                  <div key={row.name} className="grid items-center px-3 py-1.5" style={{ gridTemplateColumns: "2fr 0.7fr 1fr 1fr", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+                    <div>{row.name}</div>
+                    <div style={{ fontFamily: "IBM Plex Mono" }}>{row.qty}</div>
+                    <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(row.revenue)}</div>
+                    <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.green }}>Rs {fmt(row.profit)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
   const [date, setDate] = useState(todayStr());
   const [dishId, setDishId] = useState(dishes[0]?.id || "");
   const selectedDish = dishes.find((d) => d.id === dishId) || dishes[0];
   const [variantId, setVariantId] = useState(selectedDish?.variants?.[0]?.id || "");
   const [qty, setQty] = useState(1);
+  const [viewMode, setViewMode] = useState("daily"); // "daily" | "weekly" | "monthly"
 
   const currentDish = dishes.find((d) => d.id === dishId);
   const variantOptions = currentDish?.variants || [];
@@ -778,6 +880,49 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
   const totalExpenses = (expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const netProfit = allTime.profit - totalExpenses;
 
+  // group sales & expenses by period (week/month) for the filtered views
+  const byPeriodSales = {};
+  sales.forEach((s) => {
+    const k = periodKey(s.date, viewMode);
+    if (!byPeriodSales[k]) byPeriodSales[k] = [];
+    byPeriodSales[k].push(s);
+  });
+  const byPeriodExpenses = {};
+  (expenses || []).forEach((e) => {
+    const k = periodKey(e.date, viewMode);
+    if (!byPeriodExpenses[k]) byPeriodExpenses[k] = [];
+    byPeriodExpenses[k].push(e);
+  });
+  const periodKeys = Array.from(new Set([...Object.keys(byPeriodSales), ...Object.keys(byPeriodExpenses)])).sort((a, b) => (a < b ? 1 : -1));
+
+  const periods = periodKeys.map((k) => {
+    const sEntries = byPeriodSales[k] || [];
+    const eEntries = byPeriodExpenses[k] || [];
+    const totals = sEntries.reduce(
+      (acc, s) => {
+        acc.items += s.qty;
+        acc.revenue += s.qty * s.unitPrice;
+        acc.profit += s.qty * (s.unitPrice - s.unitCost);
+        return acc;
+      },
+      { items: 0, revenue: 0, profit: 0 }
+    );
+    const expenseTotal = eEntries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+    // aggregate by dish for a quick breakdown
+    const byDish = {};
+    sEntries.forEach((s) => {
+      const key = `${s.dishName} · ${s.variantLabel}`;
+      if (!byDish[key]) byDish[key] = { name: key, qty: 0, revenue: 0, profit: 0 };
+      byDish[key].qty += s.qty;
+      byDish[key].revenue += s.qty * s.unitPrice;
+      byDish[key].profit += s.qty * (s.unitPrice - s.unitCost);
+    });
+    const dishBreakdown = Object.values(byDish).sort((a, b) => b.revenue - a.revenue);
+
+    return { key: k, label: periodLabel(k, viewMode), totals, expenseTotal, net: totals.profit - expenseTotal, dishBreakdown };
+  });
+
   return (
     <div>
       <SectionHeader eyebrow="Daily Sales" title="Log what you sold" />
@@ -787,6 +932,27 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
         <Card label="Today's revenue" value={`Rs ${fmt(todayTotal.revenue)}`} />
         <Card label="Today's expenses" value={`Rs ${fmt(todayExpenses)}`} tone={COLORS.rust} />
         <Card label="Today's net profit" value={`Rs ${fmt(todayTotal.profit - todayExpenses)}`} tone={todayTotal.profit - todayExpenses >= 0 ? COLORS.green : COLORS.rust} />
+      </div>
+
+      <div className="flex items-center gap-2 mb-6">
+        {[
+          { key: "daily", label: "Daily" },
+          { key: "weekly", label: "Weekly" },
+          { key: "monthly", label: "Monthly" },
+        ].map((m) => (
+          <button
+            key={m.key}
+            onClick={() => setViewMode(m.key)}
+            className="px-4 py-1.5 rounded-full text-sm font-semibold"
+            style={{
+              background: viewMode === m.key ? COLORS.maroon : COLORS.surface,
+              color: viewMode === m.key ? "#F3EAD3" : COLORS.inkSoft,
+              border: `1px solid ${viewMode === m.key ? COLORS.maroon : COLORS.border}`,
+            }}
+          >
+            {m.label}
+          </button>
+        ))}
       </div>
 
       <div className="p-4 rounded-xl mb-8" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
@@ -831,89 +997,103 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
         )}
       </div>
 
-      {sortedDates.length === 0 && <div style={{ fontSize: 13, color: COLORS.inkSoft }}>No sales logged yet. Add your first one above.</div>}
+      {viewMode === "daily" && (
+        <>
+          {sortedDates.length === 0 && <div style={{ fontSize: 13, color: COLORS.inkSoft }}>No sales logged yet. Add your first one above.</div>}
 
-      {sortedDates.map((d) => {
-        const entries = byDate[d] || [];
-        const dayExpenses = expByDate[d] || [];
-        const totals = entries.reduce(
-          (acc, s) => {
-            acc.items += s.qty;
-            acc.revenue += s.qty * s.unitPrice;
-            acc.profit += s.qty * (s.unitPrice - s.unitCost);
-            return acc;
-          },
-          { items: 0, revenue: 0, profit: 0 }
-        );
-        const dayExpenseTotal = dayExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-        const dayNet = totals.profit - dayExpenseTotal;
-        return (
-          <div key={d} className="mb-6 rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.border}` }}>
-            <div className="flex items-center justify-between px-4 py-2" style={{ background: COLORS.goldFaint }}>
-              <div style={{ fontFamily: "Cormorant Garamond", fontWeight: 700, fontSize: 18, color: COLORS.maroonDark }}>
-                {new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
-              </div>
-              <div style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: COLORS.maroonDark }}>
-                {totals.items} items · Rs {fmt(totals.revenue)} revenue · Rs {fmt(totals.profit)} sales profit
-              </div>
-            </div>
-            {entries.length > 0 && (
-              <div style={{ overflowX: "auto" }}>
-                <div style={{ minWidth: 620 }}>
-                  <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
-                    <div>Dish</div>
-                    <div>Option</div>
-                    <div>Qty</div>
-                    <div>Unit price</div>
-                    <div>Revenue</div>
-                    <div>Profit</div>
-                    <div></div>
+          {sortedDates.map((d) => {
+            const entries = byDate[d] || [];
+            const dayExpenses = expByDate[d] || [];
+            const totals = entries.reduce(
+              (acc, s) => {
+                acc.items += s.qty;
+                acc.revenue += s.qty * s.unitPrice;
+                acc.profit += s.qty * (s.unitPrice - s.unitCost);
+                return acc;
+              },
+              { items: 0, revenue: 0, profit: 0 }
+            );
+            const dayExpenseTotal = dayExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+            const dayNet = totals.profit - dayExpenseTotal;
+            return (
+              <div key={d} className="mb-6 rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.border}` }}>
+                <div className="flex items-center justify-between px-4 py-2" style={{ background: COLORS.goldFaint }}>
+                  <div style={{ fontFamily: "Cormorant Garamond", fontWeight: 700, fontSize: 18, color: COLORS.maroonDark }}>
+                    {new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                   </div>
-                  {entries.map((s) => (
-                    <div key={s.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
-                      <div>{s.dishName}</div>
-                      <div style={{ color: COLORS.inkSoft }}>{s.variantLabel}</div>
-                      <div style={{ fontFamily: "IBM Plex Mono" }}>{s.qty}</div>
-                      <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.unitPrice)}</div>
-                      <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.qty * s.unitPrice)}</div>
-                      <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.green }}>Rs {fmt(s.qty * (s.unitPrice - s.unitCost))}</div>
-                      <button onClick={() => deleteSale(s.id)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+                  <div style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: COLORS.maroonDark }}>
+                    {totals.items} items · Rs {fmt(totals.revenue)} revenue · Rs {fmt(totals.profit)} sales profit
+                  </div>
+                </div>
+                {entries.length > 0 && (
+                  <div style={{ overflowX: "auto" }}>
+                    <div style={{ minWidth: 620 }}>
+                      <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
+                        <div>Dish</div>
+                        <div>Option</div>
+                        <div>Qty</div>
+                        <div>Unit price</div>
+                        <div>Revenue</div>
+                        <div>Profit</div>
+                        <div></div>
+                      </div>
+                      {entries.map((s) => (
+                        <div key={s.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+                          <div>{s.dishName}</div>
+                          <div style={{ color: COLORS.inkSoft }}>{s.variantLabel}</div>
+                          <div style={{ fontFamily: "IBM Plex Mono" }}>{s.qty}</div>
+                          <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.unitPrice)}</div>
+                          <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.qty * s.unitPrice)}</div>
+                          <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.green }}>Rs {fmt(s.qty * (s.unitPrice - s.unitCost))}</div>
+                          <button onClick={() => deleteSale(s.id)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+                {dayExpenses.length > 0 && (
+                  <div style={{ overflowX: "auto" }}>
+                    <div style={{ minWidth: 420 }}>
+                      <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.rustBg, color: COLORS.rust }}>
+                        <div>Expense category</div>
+                        <div>Note</div>
+                        <div>Amount</div>
+                        <div></div>
+                      </div>
+                      {dayExpenses.map((e) => (
+                        <div key={e.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+                          <div>{e.category}</div>
+                          <div style={{ color: COLORS.inkSoft }}>{e.note || "—"}</div>
+                          <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.rust }}>Rs {fmt(e.amount)}</div>
+                          <div></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-4 py-2" style={{ background: COLORS.goldFaint, borderTop: `1px solid ${COLORS.border}` }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.maroonDark }}>
+                    Day expenses: Rs {fmt(dayExpenseTotal)}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: dayNet >= 0 ? COLORS.green : COLORS.rust }}>
+                    Net profit for the day: Rs {fmt(dayNet)}
+                  </span>
                 </div>
               </div>
-            )}
-            {dayExpenses.length > 0 && (
-              <div style={{ overflowX: "auto" }}>
-                <div style={{ minWidth: 420 }}>
-                  <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.rustBg, color: COLORS.rust }}>
-                    <div>Expense category</div>
-                    <div>Note</div>
-                    <div>Amount</div>
-                    <div></div>
-                  </div>
-                  {dayExpenses.map((e) => (
-                    <div key={e.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
-                      <div>{e.category}</div>
-                      <div style={{ color: COLORS.inkSoft }}>{e.note || "—"}</div>
-                      <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.rust }}>Rs {fmt(e.amount)}</div>
-                      <div></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="flex items-center justify-between px-4 py-2" style={{ background: COLORS.goldFaint, borderTop: `1px solid ${COLORS.border}` }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.maroonDark }}>
-                Day expenses: Rs {fmt(dayExpenseTotal)}
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: dayNet >= 0 ? COLORS.green : COLORS.rust }}>
-                Net profit for the day: Rs {fmt(dayNet)}
-              </span>
-            </div>
-          </div>
-        );
-      })}
+            );
+          })}
+        </>
+      )}
+
+      {viewMode !== "daily" && (
+        <>
+          {periods.length === 0 && <div style={{ fontSize: 13, color: COLORS.inkSoft }}>No sales logged yet. Add your first one above.</div>}
+
+          {periods.map((p) => (
+            <PeriodCard key={p.key} period={p} />
+          ))}
+        </>
+      )}
 
       {sortedDates.length > 0 && (
         <div className="p-4 rounded-xl mb-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
