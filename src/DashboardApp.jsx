@@ -234,6 +234,14 @@ export default function App() {
     return { cat, avg, count: items.length };
   });
 
+  const NAV_ITEMS = [
+    { key: "dashboard", label: "Dashboard", short: "Home" },
+    { key: "menu", label: "Menu & Costing", short: "Menu" },
+    { key: "sales", label: "Daily Sales", short: "Sales" },
+    { key: "expenses", label: "Expenses", short: "Expenses" },
+    { key: "delivery", label: "Delivery Rates", short: "Delivery" },
+  ];
+
   const sidebarItem = (key, label) => (
     <button
       onClick={() => setTab(key)}
@@ -245,10 +253,27 @@ export default function App() {
   );
 
   return (
-    <div style={{ background: COLORS.bg, minHeight: "100%", fontFamily: "Inter" }}>
+    <div style={{ background: COLORS.bg, minHeight: "100vh", fontFamily: "Inter" }}>
       <style>{FONTS}</style>
-      <div className="flex min-h-screen">
-        <div className="flex flex-col gap-1 p-5" style={{ width: 230, background: COLORS.maroonDark, flexShrink: 0 }}>
+
+      {/* Mobile top bar */}
+      <div className="flex md:hidden items-center justify-between px-4 py-3 sticky top-0 z-20" style={{ background: COLORS.maroonDark }}>
+        <div className="flex items-center gap-2">
+          <ArchIcon size={24} color={COLORS.gold} />
+          <div style={{ fontFamily: "Cormorant Garamond", fontStyle: "italic", fontWeight: 700, fontSize: 17, color: "#FBF3E1" }}>
+            Delhi k Zaiqay
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: "#9C8A78" }}>
+          {saveState === "saving" && "Saving…"}
+          {saveState === "saved" && "Saved"}
+          {saveState === "error" && "Save failed"}
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row min-h-screen">
+        {/* Desktop sidebar */}
+        <div className="hidden md:flex md:flex-col gap-1 p-5" style={{ width: 230, background: COLORS.maroonDark, flexShrink: 0 }}>
           <div className="flex items-center gap-2 mb-1 px-1">
             <ArchIcon size={30} color={COLORS.gold} />
             <div>
@@ -259,11 +284,7 @@ export default function App() {
           <div className="my-3 px-1">
             <Flourish color={COLORS.gold} />
           </div>
-          {sidebarItem("dashboard", "Dashboard")}
-          {sidebarItem("menu", "Menu & Costing")}
-          {sidebarItem("sales", "Daily Sales")}
-          {sidebarItem("expenses", "Expenses")}
-          {sidebarItem("delivery", "Delivery Rates")}
+          {NAV_ITEMS.map((n) => sidebarItem(n.key, n.label))}
           <div className="flex-1" />
           <div style={{ fontSize: 11, color: "#9C8A78", padding: "0 4px" }}>
             {saveState === "saving" && "Saving…"}
@@ -272,7 +293,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex-1 p-8" style={{ maxWidth: 1120 }}>
+        <div className="flex-1 p-4 md:p-8 pb-24 md:pb-8 w-full" style={{ maxWidth: 1120 }}>
           {tab === "dashboard" && <Dashboard totalDishes={dishes.length} priced={priced} avgMargin={avgMargin} best={best} worst={worst} unpriced={unpriced} catAvg={catAvg} zones={zones} />}
           {tab === "menu" && (
             <MenuCosting
@@ -297,6 +318,32 @@ export default function App() {
           {tab === "delivery" && <Delivery zones={zones} updateZone={updateZone} deleteZone={deleteZone} addZone={addZone} />}
         </div>
       </div>
+
+      {/* Mobile bottom nav */}
+      <div
+        className="flex md:hidden items-stretch justify-around fixed bottom-0 left-0 right-0 z-20"
+        style={{ background: COLORS.maroonDark, borderTop: `1px solid ${COLORS.gold}33`, paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {NAV_ITEMS.map((n) => (
+          <button
+            key={n.key}
+            onClick={() => setTab(n.key)}
+            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5"
+            style={{ color: tab === n.key ? COLORS.gold : "#9C8A78" }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: tab === n.key ? COLORS.gold : "transparent",
+                marginBottom: 2,
+              }}
+            />
+            <span style={{ fontSize: 10.5, fontWeight: tab === n.key ? 700 : 500, fontFamily: "Inter" }}>{n.short}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -305,7 +352,7 @@ function SectionHeader({ eyebrow, title }) {
   return (
     <div className="mb-6">
       <div style={{ fontSize: 11, letterSpacing: 2, color: COLORS.gold, fontWeight: 700 }}>{eyebrow}</div>
-      <div style={{ fontFamily: "Cormorant Garamond", fontWeight: 700, fontSize: 34, color: COLORS.ink }}>{title}</div>
+      <div className="text-2xl md:text-4xl" style={{ fontFamily: "Cormorant Garamond", fontWeight: 700, color: COLORS.ink }}>{title}</div>
       <Flourish color={COLORS.gold} />
     </div>
   );
@@ -325,7 +372,7 @@ function Dashboard({ totalDishes, priced, avgMargin, best, worst, unpriced, catA
   return (
     <div>
       <SectionHeader eyebrow="Overview" title="Business at a glance" />
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <Card label="Total dishes" value={totalDishes} />
         <Card label="Priced options" value={priced.length} sub={unpriced > 0 ? `${unpriced} options still need pricing` : "All options priced"} tone={unpriced > 0 ? COLORS.rust : COLORS.green} />
         <Card label="Avg profit margin" value={avgMargin !== null ? `${avgMargin.toFixed(0)}%` : "—"} tone={avgMargin !== null ? marginTone(avgMargin).color : undefined} />
@@ -336,7 +383,7 @@ function Dashboard({ totalDishes, priced, avgMargin, best, worst, unpriced, catA
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
         <div className="p-5 rounded-xl" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 10 }}>Best margin</div>
           {best ? (
@@ -443,7 +490,7 @@ function MenuCosting({
     <div>
       <SectionHeader eyebrow="Menu & Costing" title="Ingredients once, priced by portion" />
 
-      <div className="flex gap-2 mb-6 items-center">
+      <div className="flex flex-wrap gap-2 mb-6 items-center">
         <input
           value={newDishName}
           onChange={(e) => setNewDishName(e.target.value)}
@@ -475,12 +522,12 @@ function MenuCosting({
                 const cpg = costPerGram(d);
                 return (
                   <div key={d.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.border}` }}>
-                    <div className="flex items-center justify-between px-4 py-2.5" style={{ background: COLORS.surface }}>
+                    <div className="flex items-center justify-between px-4 py-2.5 flex-wrap gap-y-2" style={{ background: COLORS.surface }}>
                       <button onClick={() => toggle(d.id)} className="flex items-center gap-2 text-left" style={{ fontSize: 14, color: COLORS.ink }}>
                         <span style={{ color: COLORS.gold, fontSize: 11, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>▶</span>
                         <span style={{ fontWeight: 600 }}>{d.name}</span>
                       </button>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {(d.variants || []).map((v) => {
                           const s = variantStats(d, v);
                           const tone = marginTone(s.margin);
@@ -634,23 +681,25 @@ function Delivery({ zones, updateZone, deleteZone, addZone }) {
       <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
         Charged per order based on delivery distance. Adjust the ranges and rates below.
       </div>
-      <div className="rounded-xl overflow-hidden mb-4" style={{ border: `1px solid ${COLORS.border}` }}>
-        <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 40px", background: COLORS.goldFaint, color: COLORS.maroonDark }}>
-          <div>Zone label</div>
-          <div>Min km</div>
-          <div>Max km</div>
-          <div>Rate (Rs)</div>
-          <div></div>
-        </div>
-        {zones.map((z) => (
-          <div key={z.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 40px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface }}>
-            <input value={z.label} onChange={(e) => updateZone(z.id, "label", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, fontFamily: "Inter" }} />
-            <input type="number" value={z.minKm} onChange={(e) => updateZone(z.id, "minKm", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 70, fontFamily: "IBM Plex Mono" }} />
-            <input type="number" value={z.maxKm} onChange={(e) => updateZone(z.id, "maxKm", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 70, fontFamily: "IBM Plex Mono" }} />
-            <input type="number" value={z.rate} onChange={(e) => updateZone(z.id, "rate", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 80, fontFamily: "IBM Plex Mono" }} />
-            <button onClick={() => deleteZone(z.id)} style={{ color: COLORS.rust, fontSize: 16, fontWeight: 700 }}>×</button>
+      <div className="rounded-xl mb-4" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto" }}>
+        <div style={{ minWidth: 480 }}>
+          <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 40px", background: COLORS.goldFaint, color: COLORS.maroonDark }}>
+            <div>Zone label</div>
+            <div>Min km</div>
+            <div>Max km</div>
+            <div>Rate (Rs)</div>
+            <div></div>
           </div>
-        ))}
+          {zones.map((z) => (
+            <div key={z.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 40px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface }}>
+              <input value={z.label} onChange={(e) => updateZone(z.id, "label", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, fontFamily: "Inter" }} />
+              <input type="number" value={z.minKm} onChange={(e) => updateZone(z.id, "minKm", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 70, fontFamily: "IBM Plex Mono" }} />
+              <input type="number" value={z.maxKm} onChange={(e) => updateZone(z.id, "maxKm", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 70, fontFamily: "IBM Plex Mono" }} />
+              <input type="number" value={z.rate} onChange={(e) => updateZone(z.id, "rate", e.target.value)} className="px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 80, fontFamily: "IBM Plex Mono" }} />
+              <button onClick={() => deleteZone(z.id)} style={{ color: COLORS.rust, fontSize: 16, fontWeight: 700 }}>×</button>
+            </div>
+          ))}
+        </div>
       </div>
       <button onClick={addZone} className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: COLORS.maroon, color: "#F3EAD3" }}>
         + Add zone
@@ -733,7 +782,7 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
     <div>
       <SectionHeader eyebrow="Daily Sales" title="Log what you sold" />
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <Card label="Today's items sold" value={todayTotal.items} />
         <Card label="Today's revenue" value={`Rs ${fmt(todayTotal.revenue)}`} />
         <Card label="Today's expenses" value={`Rs ${fmt(todayExpenses)}`} tone={COLORS.rust} />
@@ -809,45 +858,49 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
               </div>
             </div>
             {entries.length > 0 && (
-              <div>
-                <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
-                  <div>Dish</div>
-                  <div>Option</div>
-                  <div>Qty</div>
-                  <div>Unit price</div>
-                  <div>Revenue</div>
-                  <div>Profit</div>
-                  <div></div>
-                </div>
-                {entries.map((s) => (
-                  <div key={s.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
-                    <div>{s.dishName}</div>
-                    <div style={{ color: COLORS.inkSoft }}>{s.variantLabel}</div>
-                    <div style={{ fontFamily: "IBM Plex Mono" }}>{s.qty}</div>
-                    <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.unitPrice)}</div>
-                    <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.qty * s.unitPrice)}</div>
-                    <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.green }}>Rs {fmt(s.qty * (s.unitPrice - s.unitCost))}</div>
-                    <button onClick={() => deleteSale(s.id)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+              <div style={{ overflowX: "auto" }}>
+                <div style={{ minWidth: 620 }}>
+                  <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
+                    <div>Dish</div>
+                    <div>Option</div>
+                    <div>Qty</div>
+                    <div>Unit price</div>
+                    <div>Revenue</div>
+                    <div>Profit</div>
+                    <div></div>
                   </div>
-                ))}
+                  {entries.map((s) => (
+                    <div key={s.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+                      <div>{s.dishName}</div>
+                      <div style={{ color: COLORS.inkSoft }}>{s.variantLabel}</div>
+                      <div style={{ fontFamily: "IBM Plex Mono" }}>{s.qty}</div>
+                      <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.unitPrice)}</div>
+                      <div style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(s.qty * s.unitPrice)}</div>
+                      <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.green }}>Rs {fmt(s.qty * (s.unitPrice - s.unitCost))}</div>
+                      <button onClick={() => deleteSale(s.id)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             {dayExpenses.length > 0 && (
-              <div>
-                <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.rustBg, color: COLORS.rust }}>
-                  <div>Expense category</div>
-                  <div>Note</div>
-                  <div>Amount</div>
-                  <div></div>
-                </div>
-                {dayExpenses.map((e) => (
-                  <div key={e.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
-                    <div>{e.category}</div>
-                    <div style={{ color: COLORS.inkSoft }}>{e.note || "—"}</div>
-                    <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.rust }}>Rs {fmt(e.amount)}</div>
+              <div style={{ overflowX: "auto" }}>
+                <div style={{ minWidth: 420 }}>
+                  <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.rustBg, color: COLORS.rust }}>
+                    <div>Expense category</div>
+                    <div>Note</div>
+                    <div>Amount</div>
                     <div></div>
                   </div>
-                ))}
+                  {dayExpenses.map((e) => (
+                    <div key={e.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+                      <div>{e.category}</div>
+                      <div style={{ color: COLORS.inkSoft }}>{e.note || "—"}</div>
+                      <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.rust }}>Rs {fmt(e.amount)}</div>
+                      <div></div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-2" style={{ background: COLORS.goldFaint, borderTop: `1px solid ${COLORS.border}` }}>
@@ -870,7 +923,7 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
         <Card label="Profit from sales" value={`Rs ${fmt(allTime.profit)}`} tone={COLORS.green} />
         <Card label="Total expenses" value={`Rs ${fmt(totalExpenses)}`} tone={COLORS.rust} />
         <Card label="Net profit" value={`Rs ${fmt(netProfit)}`} tone={netProfit >= 0 ? COLORS.green : COLORS.rust} sub="Sales profit minus expenses" />
@@ -913,7 +966,7 @@ function Expenses({ expenses, addExpense, deleteExpense }) {
     <div>
       <SectionHeader eyebrow="Expenses" title="Track your running costs" />
 
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
         <Card label="Today's expenses" value={`Rs ${fmt(totalToday)}`} tone={COLORS.rust} />
         <Card label="All-time expenses" value={`Rs ${fmt(totalAll)}`} tone={COLORS.rust} />
       </div>
@@ -974,21 +1027,23 @@ function Expenses({ expenses, addExpense, deleteExpense }) {
               </div>
               <div style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: COLORS.maroonDark }}>Rs {fmt(dayTotal)} spent</div>
             </div>
-            <div>
-              <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
-                <div>Category</div>
-                <div>Note</div>
-                <div>Amount</div>
-                <div></div>
-              </div>
-              {entries.map((e) => (
-                <div key={e.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
-                  <div>{e.category}</div>
-                  <div style={{ color: COLORS.inkSoft }}>{e.note || "—"}</div>
-                  <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.rust }}>Rs {fmt(e.amount)}</div>
-                  <button onClick={() => deleteExpense(e.id)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+            <div style={{ overflowX: "auto" }}>
+              <div style={{ minWidth: 420 }}>
+                <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
+                  <div>Category</div>
+                  <div>Note</div>
+                  <div>Amount</div>
+                  <div></div>
                 </div>
-              ))}
+                {entries.map((e) => (
+                  <div key={e.id} className="grid items-center px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+                    <div>{e.category}</div>
+                    <div style={{ color: COLORS.inkSoft }}>{e.note || "—"}</div>
+                    <div style={{ fontFamily: "IBM Plex Mono", color: COLORS.rust }}>Rs {fmt(e.amount)}</div>
+                    <button onClick={() => deleteExpense(e.id)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );
