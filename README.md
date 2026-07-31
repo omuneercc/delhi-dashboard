@@ -104,7 +104,78 @@ This makes sure login/session behavior works correctly on your real domain (not 
 
 - Visit your subdomain on your phone or laptop, sign in with the one admin account you created.
 - Everything you enter (dishes, ingredients, sales, expenses, delivery zones) is saved to your Supabase database instantly and will show up the same on any device you log into.
-- If you ever add staff who need their own logins, come back and we can add that (right now it's built for one account, as you asked for).
+- Staff can now sign up, but need your approval before they can access anything — see the security section below.
+
+---
+
+## Security: approval-gated signups + auto session timeout
+
+By default, anyone who finds the login link could sign themselves up. This adds real protection:
+
+- **Approval required**: anyone who signs up is created as "pending" and **cannot read or write any data** (enforced at the database level, not just hidden in the UI) until you approve them.
+- **You (omuneercc@gmail.com) are the super admin** — auto-approved on signup, and the only account that can approve/reject others.
+- **Email notification**: you get an email whenever someone signs up, so you're not stuck manually checking.
+- **15-minute auto sign-out**: if the app sits idle (no taps/clicks/scrolling) for 15 minutes, it signs out automatically.
+
+### Step A — Run the security SQL
+
+In Supabase → **SQL Editor** → New query, paste the contents of `supabase_security_setup.sql` from this project → **Run**. This:
+- Creates a `profiles` table tracking who's approved
+- Auto-creates a profile on every signup (auto-approved only for `omuneercc@gmail.com`)
+- Updates your database security rules so unapproved accounts can't touch any data, even if they're logged in
+
+### Step B — Set up the signup email notification (via Resend)
+
+Resend has a generous free tier and is the simplest way to send email from Supabase without running your own mail server.
+
+1. Go to https://resend.com → sign up (free) with **omuneercc@gmail.com** (or any email — you'll set the "to" address separately).
+2. Go to **API Keys** → **Create API Key** → copy it (starts with `re_`).
+3. Note: on Resend's free/sandbox tier, the default sender `onboarding@resend.dev` can only send to the **email you signed up with on Resend**. Since that's `omuneercc@gmail.com`, that's exactly what we want — no domain verification needed for this to work.
+
+### Step C — Deploy the notification function to Supabase
+
+This needs the Supabase CLI (one-time install):
+
+```bash
+npm install -g supabase
+supabase login
+```
+
+Then, inside this project folder:
+
+```bash
+supabase link --project-ref YOUR-PROJECT-REF
+```
+(Find `YOUR-PROJECT-REF` in Supabase → Project Settings → General → Reference ID)
+
+```bash
+supabase functions deploy notify-signup --no-verify-jwt
+supabase secrets set RESEND_API_KEY=re_your_actual_key_here
+```
+
+### Step D — Wire it up with a Database Webhook
+
+1. In Supabase, go to **Database → Webhooks → Create a new webhook**.
+2. Name: `notify-signup`
+3. Table: `profiles`
+4. Events: check **Insert** only
+5. Type: **HTTP Request** → Method: `POST`
+6. URL: your deployed function's URL — find it under **Edge Functions** in Supabase after deploying (looks like `https://xxxxx.supabase.co/functions/v1/notify-signup`)
+7. Save.
+
+Now, whenever someone signs up, you'll get an email at omuneercc@gmail.com.
+
+### Step E — Approving people
+
+1. Sign in as the super admin (omuneercc@gmail.com).
+2. You'll see a small **"Admin"** button in the bottom-right corner of the dashboard.
+3. Tap it — you'll see pending signups with **Approve** / **Reject** buttons, and a list of already-approved users with a **Revoke access** option.
+
+### About the 15-minute timeout
+
+This is already built into the app code (no extra setup needed) — it tracks taps, clicks, scrolling, and key presses, and signs out automatically after 15 minutes of no activity, showing a message on the login screen.
+
+---
 
 ## Costs
 
