@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import { toast } from "./lib/toast";
 
 const COLORS = {
   bg: "#FAF6EE",
@@ -30,18 +31,21 @@ export default function AdminApprovals({ onClose }) {
     load();
   }, []);
 
-  const approve = async (id) => {
+  const approve = async (id, email) => {
     await supabase.from("profiles").update({ approved: true }).eq("id", id);
+    toast(`${email} approved`);
     load();
   };
-  const reject = async (id) => {
+  const reject = async (id, email) => {
     if (!confirm("Reject and delete this signup request?")) return;
     await supabase.from("profiles").delete().eq("id", id);
+    toast(`${email} rejected`, "error");
     load();
   };
-  const revoke = async (id) => {
+  const revoke = async (id, email) => {
     if (!confirm("Revoke this user's access?")) return;
     await supabase.from("profiles").update({ approved: false }).eq("id", id);
+    toast(`${email} access revoked`, "error");
     load();
   };
 
@@ -103,10 +107,10 @@ export default function AdminApprovals({ onClose }) {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => approve(p.id)} className="px-3 py-1 rounded-md text-xs font-semibold" style={{ background: COLORS.green, color: "#fff" }}>
+                  <button onClick={() => approve(p.id, p.email)} className="px-3 py-1 rounded-md text-xs font-semibold" style={{ background: COLORS.green, color: "#fff" }}>
                     Approve
                   </button>
-                  <button onClick={() => reject(p.id)} className="px-3 py-1 rounded-md text-xs font-semibold" style={{ background: COLORS.rust, color: "#fff" }}>
+                  <button onClick={() => reject(p.id, p.email)} className="px-3 py-1 rounded-md text-xs font-semibold" style={{ background: COLORS.rust, color: "#fff" }}>
                     Reject
                   </button>
                 </div>
@@ -128,7 +132,7 @@ export default function AdminApprovals({ onClose }) {
                   </div>
                 </div>
                 {p.role !== "admin" && (
-                  <button onClick={() => revoke(p.id)} className="px-3 py-1 rounded-md text-xs font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark, border: `1px solid ${COLORS.gold}` }}>
+                  <button onClick={() => revoke(p.id, p.email)} className="px-3 py-1 rounded-md text-xs font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark, border: `1px solid ${COLORS.gold}` }}>
                     Revoke access
                   </button>
                 )}

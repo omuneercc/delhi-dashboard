@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { LayoutDashboard, ShoppingCart, UtensilsCrossed, TrendingUp, Receipt, Truck } from "lucide-react";
+import { toast } from "./lib/toast";
 
 const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
@@ -213,13 +215,17 @@ export default function App() {
   }, [dishes, zones, sales, expenses, loaded]);
 
   const updateDish = (id, field, value) => setDishes((ds) => ds.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
-  const deleteDish = (id) => setDishes((ds) => ds.filter((d) => d.id !== id));
+  const deleteDish = (id) => {
+    setDishes((ds) => ds.filter((d) => d.id !== id));
+    toast("Dish removed");
+  };
   const addDish = () => {
     if (!newDishName.trim()) return;
     setDishes((ds) => [
       ...ds,
       { id: "d" + Date.now(), name: newDishName.trim(), category: newDishCat, ingredients: [], makingCharge: "", batchWeight: 1000, variants: DEFAULT_VARIANTS() },
     ]);
+    toast(`"${newDishName.trim()}" added to menu`);
     setNewDishName("");
   };
 
@@ -241,12 +247,21 @@ export default function App() {
 
   const updateZone = (id, field, value) => setZones((zs) => zs.map((z) => (z.id === id ? { ...z, [field]: value } : z)));
   const deleteZone = (id) => setZones((zs) => zs.filter((z) => z.id !== id));
-  const addZone = () => setZones((zs) => [...zs, { id: "z" + Date.now(), label: "New zone", minKm: 0, maxKm: 0, rate: 300 }]);
+  const addZone = () => {
+    setZones((zs) => [...zs, { id: "z" + Date.now(), label: "New zone", minKm: 0, maxKm: 0, rate: 300 }]);
+    toast("Delivery zone added");
+  };
 
-  const addSale = (entry) => setSales((ss) => [{ id: "s" + Date.now() + Math.random(), ...entry }, ...ss]);
+  const addSale = (entry, opts = {}) => {
+    setSales((ss) => [{ id: "s" + Date.now() + Math.random(), ...entry }, ...ss]);
+    if (!opts.silent) toast(`Sale logged: ${entry.dishName} × ${entry.qty}`);
+  };
   const deleteSale = (id) => setSales((ss) => ss.filter((s) => s.id !== id));
 
-  const addExpense = (entry) => setExpenses((es) => [{ id: "e" + Date.now() + Math.random(), ...entry }, ...es]);
+  const addExpense = (entry) => {
+    setExpenses((es) => [{ id: "e" + Date.now() + Math.random(), ...entry }, ...es]);
+    toast(`Expense logged: Rs ${Math.round(entry.amount)}`);
+  };
   const deleteExpense = (id) => setExpenses((es) => es.filter((e) => e.id !== id));
 
   const priced = [];
@@ -267,20 +282,21 @@ export default function App() {
   });
 
   const NAV_ITEMS = [
-    { key: "dashboard", label: "Dashboard", short: "Home" },
-    { key: "order", label: "New Order", short: "New Order" },
-    { key: "menu", label: "Menu & Costing", short: "Menu" },
-    { key: "sales", label: "Daily Sales", short: "Sales" },
-    { key: "expenses", label: "Expenses", short: "Expenses" },
-    { key: "delivery", label: "Delivery Rates", short: "Delivery" },
+    { key: "dashboard", label: "Dashboard", short: "Home", Icon: LayoutDashboard },
+    { key: "order", label: "New Order", short: "New Order", Icon: ShoppingCart },
+    { key: "menu", label: "Menu & Costing", short: "Menu", Icon: UtensilsCrossed },
+    { key: "sales", label: "Daily Sales", short: "Sales", Icon: TrendingUp },
+    { key: "expenses", label: "Expenses", short: "Expenses", Icon: Receipt },
+    { key: "delivery", label: "Delivery Rates", short: "Delivery", Icon: Truck },
   ];
 
-  const sidebarItem = (key, label) => (
+  const sidebarItem = (key, label, Icon) => (
     <button
       onClick={() => setTab(key)}
       className="flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg transition-colors"
       style={{ background: tab === key ? COLORS.maroon : "transparent", color: tab === key ? "#F3EAD3" : COLORS.goldSoft, fontFamily: "Inter", fontWeight: 600, fontSize: 14, letterSpacing: 0.2 }}
     >
+      {Icon && <Icon size={17} strokeWidth={2} />}
       {label}
     </button>
   );
@@ -317,7 +333,7 @@ export default function App() {
           <div className="my-3 px-1">
             <Flourish color={COLORS.gold} />
           </div>
-          {NAV_ITEMS.map((n) => sidebarItem(n.key, n.label))}
+          {NAV_ITEMS.map((n) => sidebarItem(n.key, n.label, n.Icon))}
           <div className="flex-1" />
           <div style={{ fontSize: 11, color: "#9C8A78", padding: "0 4px" }}>
             {saveState === "saving" && "Saving…"}
@@ -327,29 +343,31 @@ export default function App() {
         </div>
 
         <div className="flex-1 p-4 md:p-8 pb-24 md:pb-8 w-full" style={{ maxWidth: 1120 }}>
-          {tab === "dashboard" && <Dashboard totalDishes={dishes.length} priced={priced} avgMargin={avgMargin} best={best} worst={worst} unpriced={unpriced} catAvg={catAvg} zones={zones} />}
-          {tab === "menu" && (
-            <MenuCosting
-              dishes={dishes}
-              updateDish={updateDish}
-              deleteDish={deleteDish}
-              addDish={addDish}
-              newDishName={newDishName}
-              setNewDishName={setNewDishName}
-              newDishCat={newDishCat}
-              setNewDishCat={setNewDishCat}
-              addIngredient={addIngredient}
-              updateIngredient={updateIngredient}
-              deleteIngredient={deleteIngredient}
-              updateVariant={updateVariant}
-              addVariant={addVariant}
-              deleteVariant={deleteVariant}
-            />
-          )}
-          {tab === "order" && <NewOrder dishes={dishes} zones={zones} addSale={addSale} />}
-          {tab === "sales" && <DailySales dishes={dishes} sales={sales} addSale={addSale} deleteSale={deleteSale} expenses={expenses} />}
-          {tab === "expenses" && <Expenses expenses={expenses} addExpense={addExpense} deleteExpense={deleteExpense} />}
-          {tab === "delivery" && <Delivery zones={zones} updateZone={updateZone} deleteZone={deleteZone} addZone={addZone} />}
+          <div key={tab} className="tab-fade-in">
+            {tab === "dashboard" && <Dashboard totalDishes={dishes.length} priced={priced} avgMargin={avgMargin} best={best} worst={worst} unpriced={unpriced} catAvg={catAvg} zones={zones} />}
+            {tab === "menu" && (
+              <MenuCosting
+                dishes={dishes}
+                updateDish={updateDish}
+                deleteDish={deleteDish}
+                addDish={addDish}
+                newDishName={newDishName}
+                setNewDishName={setNewDishName}
+                newDishCat={newDishCat}
+                setNewDishCat={setNewDishCat}
+                addIngredient={addIngredient}
+                updateIngredient={updateIngredient}
+                deleteIngredient={deleteIngredient}
+                updateVariant={updateVariant}
+                addVariant={addVariant}
+                deleteVariant={deleteVariant}
+              />
+            )}
+            {tab === "order" && <NewOrder dishes={dishes} zones={zones} addSale={addSale} />}
+            {tab === "sales" && <DailySales dishes={dishes} sales={sales} addSale={addSale} deleteSale={deleteSale} expenses={expenses} />}
+            {tab === "expenses" && <Expenses expenses={expenses} addExpense={addExpense} deleteExpense={deleteExpense} />}
+            {tab === "delivery" && <Delivery zones={zones} updateZone={updateZone} deleteZone={deleteZone} addZone={addZone} />}
+          </div>
         </div>
       </div>
 
@@ -365,16 +383,8 @@ export default function App() {
             className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5"
             style={{ color: tab === n.key ? COLORS.gold : "#9C8A78" }}
           >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 999,
-                background: tab === n.key ? COLORS.gold : "transparent",
-                marginBottom: 2,
-              }}
-            />
-            <span style={{ fontSize: 10.5, fontWeight: tab === n.key ? 700 : 500, fontFamily: "Inter" }}>{n.short}</span>
+            {n.Icon && <n.Icon size={18} strokeWidth={tab === n.key ? 2.4 : 2} />}
+            <span style={{ fontSize: 10, fontWeight: tab === n.key ? 700 : 500, fontFamily: "Inter" }}>{n.short}</span>
           </button>
         ))}
       </div>
@@ -394,7 +404,7 @@ function SectionHeader({ eyebrow, title }) {
 
 function Card({ label, value, sub, tone }) {
   return (
-    <div className="p-4 rounded-xl" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
+    <div className="p-4 rounded-xl card-hover" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
       <div style={{ fontSize: 11, color: COLORS.inkSoft, fontWeight: 600, letterSpacing: 0.5 }}>{label.toUpperCase()}</div>
       <div style={{ fontFamily: "IBM Plex Mono", fontSize: 26, fontWeight: 600, color: tone || COLORS.ink, marginTop: 4 }}>{value}</div>
       {sub && <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 2 }}>{sub}</div>}
@@ -879,15 +889,19 @@ function NewOrder({ dishes, zones, addSale }) {
     const seq = await nextInvoiceNumber();
     const date = orderDate || todayStr();
     cart.forEach((item) => {
-      addSale({
-        date,
-        dishName: item.dishName,
-        variantLabel: item.variantLabel,
-        qty: item.qty,
-        unitPrice: item.unitPrice,
-        unitCost: item.unitCost,
-      });
+      addSale(
+        {
+          date,
+          dishName: item.dishName,
+          variantLabel: item.variantLabel,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          unitCost: item.unitCost,
+        },
+        { silent: true }
+      );
     });
+    toast(`Invoice DKZ-${String(seq).padStart(5, "0")} generated`);
     setInvoice({
       number: `DKZ-${String(seq).padStart(5, "0")}`,
       date,

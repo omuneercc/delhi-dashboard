@@ -4,6 +4,8 @@ import Login from "./Login";
 import PendingApproval from "./PendingApproval";
 import AdminApprovals from "./AdminApprovals";
 import DashboardApp from "./DashboardApp";
+import BrandLoading from "./BrandLoading";
+import ToastContainer from "./ToastContainer";
 
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
 const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
@@ -63,21 +65,13 @@ export default function AppGate() {
   }, [session]);
 
   if (session === undefined) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, sans-serif", color: "#7A6C5D" }}>
-        Loading…
-      </div>
-    );
+    return <BrandLoading label="Loading…" />;
   }
 
   if (!session) return <Login notice={signedOutReason} />;
 
   if (profile === undefined) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, sans-serif", color: "#7A6C5D" }}>
-        Checking access…
-      </div>
-    );
+    return <BrandLoading label="Checking access…" />;
   }
 
   const isSuperAdmin = profile?.role === "admin";
@@ -89,10 +83,12 @@ export default function AppGate() {
 
   return (
     <div>
+      <ToastContainer />
       <div className="fixed right-4 bottom-20 md:bottom-4 flex gap-2" style={{ zIndex: 50 }}>
         {isSuperAdmin && (
           <button
             onClick={() => setShowAdmin(true)}
+            className="card-hover"
             style={{
               fontSize: 12,
               padding: "6px 12px",
@@ -109,6 +105,7 @@ export default function AppGate() {
         )}
         <button
           onClick={() => supabase.auth.signOut()}
+          className="card-hover"
           style={{
             fontSize: 12,
             padding: "6px 12px",
