@@ -215,7 +215,11 @@ export default function App() {
   }, [dishes, zones, sales, expenses, loaded]);
 
   const updateDish = (id, field, value) => setDishes((ds) => ds.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
-  const deleteDish = (id) => {
+
+  const confirmDelete = (message) => window.confirm(message || "Are you sure you want to remove this?");
+
+  const deleteDish = (id, name) => {
+    if (!confirmDelete(`Remove "${name || "this dish"}" from the menu? This can't be undone.`)) return;
     setDishes((ds) => ds.filter((d) => d.id !== id));
     toast("Dish removed");
   };
@@ -237,16 +241,27 @@ export default function App() {
     setDishes((ds) =>
       ds.map((d) => (d.id === dishId ? { ...d, ingredients: d.ingredients.map((i) => (i.id === ingId ? { ...i, [field]: value } : i)) } : d))
     );
-  const deleteIngredient = (dishId, ingId) =>
+  const deleteIngredient = (dishId, ingId) => {
+    if (!confirmDelete("Remove this ingredient?")) return;
     setDishes((ds) => ds.map((d) => (d.id === dishId ? { ...d, ingredients: d.ingredients.filter((i) => i.id !== ingId) } : d)));
+    toast("Ingredient removed");
+  };
 
   const updateVariant = (dishId, variantId, field, value) =>
     setDishes((ds) => ds.map((d) => (d.id === dishId ? { ...d, variants: d.variants.map((v) => (v.id === variantId ? { ...v, [field]: value } : v)) } : d)));
   const addVariant = (dishId) => setDishes((ds) => ds.map((d) => (d.id === dishId ? { ...d, variants: [...d.variants, blankVariant("New option", 0)] } : d)));
-  const deleteVariant = (dishId, variantId) => setDishes((ds) => ds.map((d) => (d.id === dishId ? { ...d, variants: d.variants.filter((v) => v.id !== variantId) } : d)));
+  const deleteVariant = (dishId, variantId) => {
+    if (!confirmDelete("Remove this pricing option?")) return;
+    setDishes((ds) => ds.map((d) => (d.id === dishId ? { ...d, variants: d.variants.filter((v) => v.id !== variantId) } : d)));
+    toast("Pricing option removed");
+  };
 
   const updateZone = (id, field, value) => setZones((zs) => zs.map((z) => (z.id === id ? { ...z, [field]: value } : z)));
-  const deleteZone = (id) => setZones((zs) => zs.filter((z) => z.id !== id));
+  const deleteZone = (id) => {
+    if (!confirmDelete("Remove this delivery zone?")) return;
+    setZones((zs) => zs.filter((z) => z.id !== id));
+    toast("Delivery zone removed");
+  };
   const addZone = () => {
     setZones((zs) => [...zs, { id: "z" + Date.now(), label: "New zone", minKm: 0, maxKm: 0, rate: 300 }]);
     toast("Delivery zone added");
@@ -256,13 +271,21 @@ export default function App() {
     setSales((ss) => [{ id: "s" + Date.now() + Math.random(), ...entry }, ...ss]);
     if (!opts.silent) toast(`Sale logged: ${entry.dishName} × ${entry.qty}`);
   };
-  const deleteSale = (id) => setSales((ss) => ss.filter((s) => s.id !== id));
+  const deleteSale = (id) => {
+    if (!confirmDelete("Remove this sale record? This can't be undone.")) return;
+    setSales((ss) => ss.filter((s) => s.id !== id));
+    toast("Sale removed");
+  };
 
   const addExpense = (entry) => {
     setExpenses((es) => [{ id: "e" + Date.now() + Math.random(), ...entry }, ...es]);
     toast(`Expense logged: Rs ${Math.round(entry.amount)}`);
   };
-  const deleteExpense = (id) => setExpenses((es) => es.filter((e) => e.id !== id));
+  const deleteExpense = (id) => {
+    if (!confirmDelete("Remove this expense record? This can't be undone.")) return;
+    setExpenses((es) => es.filter((e) => e.id !== id));
+    toast("Expense removed");
+  };
 
   const priced = [];
   dishes.forEach((d) => (d.variants || []).forEach((v) => {
@@ -581,7 +604,7 @@ function MenuCosting({
                             </span>
                           );
                         })}
-                        <button onClick={() => deleteDish(d.id)} title="Remove dish" style={{ color: COLORS.rust, fontSize: 16, fontWeight: 700, marginLeft: 6 }}>
+                        <button onClick={() => deleteDish(d.id, d.name)} title="Remove dish" style={{ color: COLORS.rust, fontSize: 16, fontWeight: 700, marginLeft: 6 }}>
                           ×
                         </button>
                       </div>
@@ -597,10 +620,22 @@ function MenuCosting({
                             </div>
                             <div className="px-3 pt-2">
                               {(d.ingredients || []).length === 0 && <div style={{ fontSize: 12, color: COLORS.inkSoft, padding: "6px 2px" }}>No ingredients yet.</div>}
-                              <div className="rounded-md overflow-hidden" style={{ border: (d.ingredients || []).length ? `1px solid ${COLORS.border}` : "none" }}>
-                                {(d.ingredients || []).map((ing) => (
-                                  <IngredientRow key={ing.id} dishId={d.id} ing={ing} updateIngredient={updateIngredient} deleteIngredient={deleteIngredient} />
-                                ))}
+                              <div style={{ overflowX: "auto" }}>
+                                <div style={{ minWidth: 420 }}>
+                                  {(d.ingredients || []).length > 0 && (
+                                    <div className="grid text-xs font-semibold px-3 py-1" style={{ gridTemplateColumns: "1.6fr 1fr 1fr 28px", color: COLORS.inkSoft }}>
+                                      <div>Ingredient</div>
+                                      <div>Amount</div>
+                                      <div>Cost (Rs)</div>
+                                      <div></div>
+                                    </div>
+                                  )}
+                                  <div className="rounded-md overflow-hidden" style={{ border: (d.ingredients || []).length ? `1px solid ${COLORS.border}` : "none" }}>
+                                    {(d.ingredients || []).map((ing) => (
+                                      <IngredientRow key={ing.id} dishId={d.id} ing={ing} updateIngredient={updateIngredient} deleteIngredient={deleteIngredient} />
+                                    ))}
+                                  </div>
+                                </div>
                               </div>
                               <button onClick={() => addIngredient(d.id)} className="my-2 px-2.5 py-1 rounded-md text-xs font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark, border: `1px solid ${COLORS.gold}` }}>
                                 + Add ingredient
