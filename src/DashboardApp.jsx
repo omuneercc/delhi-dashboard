@@ -826,6 +826,7 @@ async function nextInvoiceNumber() {
 }
 
 function NewOrder({ dishes, zones, addSale }) {
+  const [orderDate, setOrderDate] = useState(todayStr());
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [dishId, setDishId] = useState(dishes[0]?.id || "");
@@ -876,7 +877,7 @@ function NewOrder({ dishes, zones, addSale }) {
   const generateInvoice = async () => {
     if (cart.length === 0) return;
     const seq = await nextInvoiceNumber();
-    const date = todayStr();
+    const date = orderDate || todayStr();
     cart.forEach((item) => {
       addSale({
         date,
@@ -907,6 +908,7 @@ function NewOrder({ dishes, zones, addSale }) {
     setCustomerPhone("");
     setZoneId("");
     setDeliveryCharge("");
+    setOrderDate(todayStr());
   };
 
   if (invoice) {
@@ -918,8 +920,18 @@ function NewOrder({ dishes, zones, addSale }) {
       <SectionHeader eyebrow="New Order" title="Build an order & generate invoice" />
 
       <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 12 }}>Customer (optional)</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 12 }}>Order details</div>
         <div className="flex flex-wrap gap-3">
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Sale date</div>
+            <input
+              type="date"
+              value={orderDate}
+              onChange={(e) => setOrderDate(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm"
+              style={{ border: `1.5px solid ${COLORS.gold}`, fontFamily: "IBM Plex Mono" }}
+            />
+          </div>
           <input
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
