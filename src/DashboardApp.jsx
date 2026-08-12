@@ -268,6 +268,7 @@ export default function App() {
 
   const NAV_ITEMS = [
     { key: "dashboard", label: "Dashboard", short: "Home" },
+    { key: "order", label: "New Order", short: "New Order" },
     { key: "menu", label: "Menu & Costing", short: "Menu" },
     { key: "sales", label: "Daily Sales", short: "Sales" },
     { key: "expenses", label: "Expenses", short: "Expenses" },
@@ -345,6 +346,7 @@ export default function App() {
               deleteVariant={deleteVariant}
             />
           )}
+          {tab === "order" && <NewOrder dishes={dishes} zones={zones} addSale={addSale} />}
           {tab === "sales" && <DailySales dishes={dishes} sales={sales} addSale={addSale} deleteSale={deleteSale} expenses={expenses} />}
           {tab === "expenses" && <Expenses expenses={expenses} addExpense={addExpense} deleteExpense={deleteExpense} />}
           {tab === "delivery" && <Delivery zones={zones} updateZone={updateZone} deleteZone={deleteZone} addZone={addZone} />}
@@ -805,6 +807,337 @@ function PeriodCard({ period }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+async function nextInvoiceNumber() {
+  let seq = 1;
+  try {
+    const res = await window.storage.get("invoice-seq", false);
+    seq = res && res.value ? Number(JSON.parse(res.value)) + 1 : 1;
+  } catch (e) {
+    seq = 1;
+  }
+  try {
+    await window.storage.set("invoice-seq", JSON.stringify(seq), false);
+  } catch (e) {}
+  return seq;
+}
+
+function NewOrder({ dishes, zones, addSale }) {
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [dishId, setDishId] = useState(dishes[0]?.id || "");
+  const currentDish = dishes.find((d) => d.id === dishId) || dishes[0];
+  const [variantId, setVariantId] = useState(currentDish?.variants?.[0]?.id || "");
+  const [qty, setQty] = useState(1);
+  const [cart, setCart] = useState([]);
+  const [zoneId, setZoneId] = useState("");
+  const [deliveryCharge, setDeliveryCharge] = useState("");
+  const [invoice, setInvoice] = useState(null);
+
+  const handleDishChange = (id) => {
+    setDishId(id);
+    const nd = dishes.find((d) => d.id === id);
+    setVariantId(nd?.variants?.[0]?.id || "");
+  };
+
+  const currentVariant = (currentDish?.variants || []).find((v) => v.id === variantId);
+
+  const addToCart = () => {
+    if (!currentDish || !currentVariant || !qty || Number(qty) <= 0) return;
+    const s = variantStats(currentDish, currentVariant);
+    setCart((c) => [
+      ...c,
+      {
+        id: "c" + Date.now() + Math.random(),
+        dishName: currentDish.name,
+        variantLabel: currentVariant.label,
+        qty: Number(qty),
+        unitPrice: Number(currentVariant.price) || 0,
+        unitCost: s.cost || 0,
+      },
+    ]);
+    setQty(1);
+  };
+  const removeFromCart = (id) => setCart((c) => c.filter((i) => i.id !== id));
+
+  const handleZoneChange = (id) => {
+    setZoneId(id);
+    const z = zones.find((zz) => zz.id === id);
+    setDeliveryCharge(z ? String(z.rate) : "");
+  };
+
+  const subtotal = cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+  const delivery = Number(deliveryCharge) || 0;
+  const total = subtotal + delivery;
+
+  const generateInvoice = async () => {
+    if (cart.length === 0) return;
+    const seq = await nextInvoiceNumber();
+    const date = todayStr();
+    cart.forEach((item) => {
+      addSale({
+        date,
+        dishName: item.dishName,
+        variantLabel: item.variantLabel,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        unitCost: item.unitCost,
+      });
+    });
+    setInvoice({
+      number: `DKZ-${String(seq).padStart(5, "0")}`,
+      date,
+      time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      items: cart,
+      subtotal,
+      delivery,
+      total,
+    });
+  };
+
+  const startNewOrder = () => {
+    setInvoice(null);
+    setCart([]);
+    setCustomerName("");
+    setCustomerPhone("");
+    setZoneId("");
+    setDeliveryCharge("");
+  };
+
+  if (invoice) {
+    return <InvoiceView invoice={invoice} onNewOrder={startNewOrder} />;
+  }
+
+  return (
+    <div>
+      <SectionHeader eyebrow="New Order" title="Build an order & generate invoice" />
+
+      <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 12 }}>Customer (optional)</div>
+        <div className="flex flex-wrap gap-3">
+          <input
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="Customer name"
+            className="px-3 py-2 rounded-lg text-sm"
+            style={{ border: `1px solid ${COLORS.border}`, flex: 1, minWidth: 160 }}
+          />
+          <input
+            value={customerPhone}
+            onChange={(e) => setCustomerPhone(e.target.value)}
+            placeholder="Phone number"
+            className="px-3 py-2 rounded-lg text-sm"
+            style={{ border: `1px solid ${COLORS.border}`, flex: 1, minWidth: 160 }}
+          />
+        </div>
+      </div>
+
+      <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 12 }}>Add items</div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Dish</div>
+            <select value={dishId} onChange={(e) => handleDishChange(e.target.value)} className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, minWidth: 200 }}>
+              {CATEGORY_ORDER.map((cat) => (
+                <optgroup key={cat} label={cat}>
+                  {dishes.filter((d) => d.category === cat).map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Option</div>
+            <select value={variantId} onChange={(e) => setVariantId(e.target.value)} className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, minWidth: 130 }}>
+              {(currentDish?.variants || []).map((v) => (
+                <option key={v.id} value={v.id}>{v.label} {v.price ? `— Rs ${fmt(v.price)}` : ""}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Qty</div>
+            <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 70, fontFamily: "IBM Plex Mono" }} />
+          </div>
+          <button onClick={addToCart} className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: COLORS.maroon, color: "#F3EAD3" }}>
+            + Add to order
+          </button>
+        </div>
+        {currentVariant && (!currentVariant.price || Number(currentVariant.price) <= 0) && (
+          <div style={{ fontSize: 12, color: COLORS.rust, marginTop: 8 }}>
+            This option doesn't have a selling price set — set it in Menu & Costing first.
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl overflow-hidden mb-6" style={{ border: `1px solid ${COLORS.border}` }}>
+        <div className="px-4 py-2 text-xs font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark }}>ORDER ITEMS</div>
+        {cart.length === 0 && <div style={{ padding: 16, fontSize: 13, color: COLORS.inkSoft, background: COLORS.surface }}>No items added yet.</div>}
+        {cart.map((item) => (
+          <div key={item.id} className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+            <div>
+              <div style={{ color: COLORS.ink }}>{item.dishName} <span style={{ color: COLORS.inkSoft }}>· {item.variantLabel}</span></div>
+              <div style={{ fontSize: 11, color: COLORS.inkSoft, fontFamily: "IBM Plex Mono" }}>{item.qty} × Rs {fmt(item.unitPrice)}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 600 }}>Rs {fmt(item.qty * item.unitPrice)}</span>
+              <button onClick={() => removeFromCart(item.id)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 12 }}>Delivery (optional)</div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Zone</div>
+            <select value={zoneId} onChange={(e) => handleZoneChange(e.target.value)} className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, minWidth: 180 }}>
+              <option value="">Pickup / no delivery</option>
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>{z.label} (Rs {fmt(z.rate)})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Delivery charge (Rs)</div>
+            <input type="number" value={deliveryCharge} onChange={(e) => setDeliveryCharge(e.target.value)} placeholder="0" className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 100, fontFamily: "IBM Plex Mono" }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.goldFaint, border: `1px solid ${COLORS.gold}` }}>
+        <div className="flex items-center justify-between mb-1">
+          <span style={{ fontSize: 13, color: COLORS.maroonDark }}>Subtotal</span>
+          <span style={{ fontFamily: "IBM Plex Mono", fontSize: 14 }}>Rs {fmt(subtotal)}</span>
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <span style={{ fontSize: 13, color: COLORS.maroonDark }}>Delivery</span>
+          <span style={{ fontFamily: "IBM Plex Mono", fontSize: 14 }}>Rs {fmt(delivery)}</span>
+        </div>
+        <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px dashed ${COLORS.gold}` }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.maroonDark }}>Total</span>
+          <span style={{ fontFamily: "IBM Plex Mono", fontSize: 20, fontWeight: 700, color: COLORS.maroonDark }}>Rs {fmt(total)}</span>
+        </div>
+      </div>
+
+      <button
+        onClick={generateInvoice}
+        disabled={cart.length === 0}
+        className="w-full px-4 py-3 rounded-lg text-sm font-semibold"
+        style={{ background: cart.length === 0 ? COLORS.border : COLORS.maroon, color: cart.length === 0 ? COLORS.inkSoft : "#F3EAD3" }}
+      >
+        Generate Invoice & Save Sale
+      </button>
+    </div>
+  );
+}
+
+function InvoiceView({ invoice, onNewOrder }) {
+  return (
+    <div>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #invoice-print-area, #invoice-print-area * { visibility: visible; }
+          #invoice-print-area { position: absolute; top: 0; left: 0; width: 100%; }
+        }
+      `}</style>
+
+      <div className="flex items-center justify-between mb-4 print:hidden">
+        <SectionHeader eyebrow="Invoice generated" title={invoice.number} />
+      </div>
+
+      <div
+        id="invoice-print-area"
+        className="mx-auto"
+        style={{
+          maxWidth: 420,
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: 28,
+          fontFamily: "Inter",
+        }}
+      >
+        <div className="flex flex-col items-center text-center mb-4">
+          <ArchIcon size={36} color={COLORS.gold} />
+          <div style={{ fontFamily: "Cormorant Garamond", fontStyle: "italic", fontWeight: 700, fontSize: 24, color: COLORS.maroonDark, marginTop: 4 }}>
+            Delhi k Zaiqay
+          </div>
+          <div style={{ fontSize: 10, color: COLORS.gold, letterSpacing: 2 }}>CATERING · GOOD FOOD · GREAT MEMORIES</div>
+        </div>
+
+        <div style={{ borderTop: `1px dashed ${COLORS.border}`, borderBottom: `1px dashed ${COLORS.border}`, padding: "10px 0", marginBottom: 14 }}>
+          <div className="flex justify-between" style={{ fontSize: 12, color: COLORS.inkSoft }}>
+            <span>Invoice #</span>
+            <span style={{ fontFamily: "IBM Plex Mono", color: COLORS.ink }}>{invoice.number}</span>
+          </div>
+          <div className="flex justify-between" style={{ fontSize: 12, color: COLORS.inkSoft }}>
+            <span>Date</span>
+            <span style={{ fontFamily: "IBM Plex Mono", color: COLORS.ink }}>
+              {new Date(invoice.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {invoice.time}
+            </span>
+          </div>
+          {invoice.customerName && (
+            <div className="flex justify-between" style={{ fontSize: 12, color: COLORS.inkSoft }}>
+              <span>Customer</span>
+              <span style={{ color: COLORS.ink }}>{invoice.customerName}</span>
+            </div>
+          )}
+          {invoice.customerPhone && (
+            <div className="flex justify-between" style={{ fontSize: 12, color: COLORS.inkSoft }}>
+              <span>Phone</span>
+              <span style={{ fontFamily: "IBM Plex Mono", color: COLORS.ink }}>{invoice.customerPhone}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: 10 }}>
+          {invoice.items.map((item, idx) => (
+            <div key={idx} className="flex justify-between items-start" style={{ fontSize: 13, padding: "5px 0", borderBottom: `1px dotted ${COLORS.border}` }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: COLORS.ink }}>{item.dishName}</div>
+                <div style={{ fontSize: 11, color: COLORS.inkSoft }}>{item.variantLabel} · {item.qty} × Rs {fmt(item.unitPrice)}</div>
+              </div>
+              <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 600 }}>Rs {fmt(item.qty * item.unitPrice)}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ borderTop: `1px dashed ${COLORS.border}`, paddingTop: 8 }}>
+          <div className="flex justify-between" style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 2 }}>
+            <span>Subtotal</span>
+            <span style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(invoice.subtotal)}</span>
+          </div>
+          <div className="flex justify-between" style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 6 }}>
+            <span>Delivery</span>
+            <span style={{ fontFamily: "IBM Plex Mono" }}>Rs {fmt(invoice.delivery)}</span>
+          </div>
+          <div className="flex justify-between items-center" style={{ borderTop: `1px solid ${COLORS.gold}`, paddingTop: 8 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.maroonDark }}>TOTAL</span>
+            <span style={{ fontFamily: "IBM Plex Mono", fontSize: 20, fontWeight: 700, color: COLORS.maroonDark }}>Rs {fmt(invoice.total)}</span>
+          </div>
+        </div>
+
+        <div className="text-center" style={{ marginTop: 20, fontFamily: "Cormorant Garamond", fontStyle: "italic", fontSize: 15, color: COLORS.gold }}>
+          Shukriya for choosing Delhi k Zaiqay
+        </div>
+      </div>
+
+      <div className="flex gap-3 justify-center mt-6 print:hidden">
+        <button onClick={() => window.print()} className="px-5 py-2.5 rounded-lg text-sm font-semibold" style={{ background: COLORS.maroon, color: "#F3EAD3" }}>
+          Print / Save as PDF
+        </button>
+        <button onClick={onNewOrder} className="px-5 py-2.5 rounded-lg text-sm font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark, border: `1px solid ${COLORS.gold}` }}>
+          Start New Order
+        </button>
+      </div>
     </div>
   );
 }
