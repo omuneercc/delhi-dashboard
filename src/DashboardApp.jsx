@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { LayoutDashboard, ShoppingCart, UtensilsCrossed, TrendingUp, Receipt, Truck } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, UtensilsCrossed, TrendingUp, Receipt, Truck, FileText } from "lucide-react";
 import { toast } from "./lib/toast";
 import logoIcon from "./assets/logo-icon.png";
 import logoFull from "./assets/logo-full.png";
@@ -169,6 +169,7 @@ export default function App() {
   const [zones, setZones] = useState(DEFAULT_ZONES);
   const [sales, setSales] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [tab, setTab] = useState("dashboard");
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState("idle");
@@ -194,6 +195,10 @@ export default function App() {
         const ex = await window.storage.get("expenses-log", false);
         if (ex && ex.value) setExpenses(JSON.parse(ex.value));
       } catch (e) {}
+      try {
+        const inv = await window.storage.get("invoices-log", false);
+        if (inv && inv.value) setInvoices(JSON.parse(inv.value));
+      } catch (e) {}
       setLoaded(true);
     })();
   }, []);
@@ -208,13 +213,14 @@ export default function App() {
         await window.storage.set("delivery-zones", JSON.stringify(zones), false);
         await window.storage.set("sales-log", JSON.stringify(sales), false);
         await window.storage.set("expenses-log", JSON.stringify(expenses), false);
+        await window.storage.set("invoices-log", JSON.stringify(invoices), false);
         setSaveState("saved");
       } catch (e) {
         setSaveState("error");
       }
     }, 500);
     return () => clearTimeout(saveTimer.current);
-  }, [dishes, zones, sales, expenses, loaded]);
+  }, [dishes, zones, sales, expenses, invoices, loaded]);
 
   const updateDish = (id, field, value) => setDishes((ds) => ds.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
 
@@ -289,6 +295,10 @@ export default function App() {
     toast("Expense removed");
   };
 
+  const addInvoiceRecord = (invoice) => {
+    setInvoices((inv) => [invoice, ...inv]);
+  };
+
   const priced = [];
   dishes.forEach((d) => (d.variants || []).forEach((v) => {
     const s = variantStats(d, v);
@@ -309,6 +319,7 @@ export default function App() {
   const NAV_ITEMS = [
     { key: "dashboard", label: "Dashboard", short: "Home", Icon: LayoutDashboard },
     { key: "order", label: "New Order", short: "New Order", Icon: ShoppingCart },
+    { key: "invoices", label: "Invoices", short: "Invoices", Icon: FileText },
     { key: "menu", label: "Menu & Costing", short: "Menu", Icon: UtensilsCrossed },
     { key: "sales", label: "Daily Sales", short: "Sales", Icon: TrendingUp },
     { key: "expenses", label: "Expenses", short: "Expenses", Icon: Receipt },
@@ -388,7 +399,8 @@ export default function App() {
                 deleteVariant={deleteVariant}
               />
             )}
-            {tab === "order" && <NewOrder dishes={dishes} zones={zones} addSale={addSale} />}
+            {tab === "order" && <NewOrder dishes={dishes} zones={zones} addSale={addSale} addInvoiceRecord={addInvoiceRecord} />}
+            {tab === "invoices" && <InvoiceRecords invoices={invoices} sales={sales} addInvoiceRecord={addInvoiceRecord} />}
             {tab === "sales" && <DailySales dishes={dishes} sales={sales} addSale={addSale} deleteSale={deleteSale} expenses={expenses} />}
             {tab === "expenses" && <Expenses expenses={expenses} addExpense={addExpense} deleteExpense={deleteExpense} />}
             {tab === "delivery" && <Delivery zones={zones} updateZone={updateZone} deleteZone={deleteZone} addZone={addZone} />}
@@ -872,7 +884,7 @@ async function nextInvoiceNumber() {
   return seq;
 }
 
-function NewOrder({ dishes, zones, addSale }) {
+function NewOrder({ dishes, zones, addSale, addInvoiceRecord }) {
   const [orderDate, setOrderDate] = useState(todayStr());
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -939,7 +951,8 @@ function NewOrder({ dishes, zones, addSale }) {
       );
     });
     toast(`Invoice DKZ-${String(seq).padStart(5, "0")} generated`);
-    setInvoice({
+    const newInvoice = {
+      id: "inv" + Date.now() + Math.random(),
       number: `DKZ-${String(seq).padStart(5, "0")}`,
       date,
       time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
@@ -949,7 +962,10 @@ function NewOrder({ dishes, zones, addSale }) {
       subtotal,
       delivery,
       total,
-    });
+      retroactive: false,
+    };
+    addInvoiceRecord(newInvoice);
+    setInvoice(newInvoice);
   };
 
   const startNewOrder = () => {
@@ -1101,7 +1117,7 @@ function NewOrder({ dishes, zones, addSale }) {
   );
 }
 
-function InvoiceView({ invoice, onNewOrder }) {
+function InvoiceView({ invoice, onNewOrder, secondaryLabel = "Start New Order" }) {
   return (
     <div>
       <style>{`
@@ -1194,8 +1210,128 @@ function InvoiceView({ invoice, onNewOrder }) {
           Print / Save as PDF
         </button>
         <button onClick={onNewOrder} className="px-5 py-2.5 rounded-lg text-sm font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark, border: `1px solid ${COLORS.gold}` }}>
-          Start New Order
+          {secondaryLabel}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [generating, setGenerating] = useState(false);
+
+  const sorted = [...invoices].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.number || "").localeCompare(a.number || "");
+  });
+
+  const filtered = search.trim()
+    ? sorted.filter((inv) => (inv.customerName || "").toLowerCase().includes(search.trim().toLowerCase()))
+    : sorted;
+
+  const totalAmount = invoices.reduce((s, inv) => s + (Number(inv.total) || 0), 0);
+
+  // find sales dates with no invoice covering them yet
+  const invoicedDates = new Set(invoices.map((i) => i.date));
+  const byDate = {};
+  sales.forEach((s) => {
+    if (!byDate[s.date]) byDate[s.date] = [];
+    byDate[s.date].push(s);
+  });
+  const missingDates = Object.keys(byDate).filter((d) => !invoicedDates.has(d));
+
+  const generateBackfill = async () => {
+    if (missingDates.length === 0) {
+      toast("No sales history missing an invoice");
+      return;
+    }
+    setGenerating(true);
+    const sortedDates = [...missingDates].sort();
+    for (const date of sortedDates) {
+      const entries = byDate[date];
+      const seq = await nextInvoiceNumber();
+      const subtotal = entries.reduce((s, e) => s + e.qty * e.unitPrice, 0);
+      addInvoiceRecord({
+        id: "inv" + Date.now() + Math.random(),
+        number: `DKZ-${String(seq).padStart(5, "0")}`,
+        date,
+        time: "—",
+        customerName: "",
+        customerPhone: "",
+        items: entries.map((e) => ({ dishName: e.dishName, variantLabel: e.variantLabel, qty: e.qty, unitPrice: e.unitPrice, unitCost: e.unitCost })),
+        subtotal,
+        delivery: 0,
+        total: subtotal,
+        retroactive: true,
+      });
+    }
+    setGenerating(false);
+    toast(`Generated ${sortedDates.length} invoice(s) from past sales`);
+  };
+
+  if (selected) {
+    return <InvoiceView invoice={selected} onNewOrder={() => setSelected(null)} secondaryLabel="Back to Invoices" />;
+  }
+
+  return (
+    <div>
+      <SectionHeader eyebrow="Invoices" title="All invoices" />
+
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <Card label="Total invoices" value={invoices.length} />
+        <Card label="Total invoiced" value={`Rs ${fmt(totalAmount)}`} />
+      </div>
+
+      {missingDates.length > 0 && (
+        <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.goldFaint, border: `1px solid ${COLORS.gold}` }}>
+          <div style={{ fontSize: 13, color: COLORS.maroonDark, marginBottom: 8 }}>
+            You have sales logged on <strong>{missingDates.length}</strong> day(s) with no invoice on record — likely from before invoices were tracked, or sales logged directly without going through New Order.
+            Generating one will create a daily summary invoice for each (no customer name, since that wasn't captured for these).
+          </div>
+          <button
+            onClick={generateBackfill}
+            disabled={generating}
+            className="px-4 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: COLORS.maroon, color: "#F3EAD3" }}
+          >
+            {generating ? "Generating…" : `Generate ${missingDates.length} invoice(s) from past sales`}
+          </button>
+        </div>
+      )}
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search by customer name"
+        className="px-3 py-2 rounded-lg text-sm mb-4 w-full"
+        style={{ border: `1px solid ${COLORS.border}` }}
+      />
+
+      {filtered.length === 0 && <div style={{ fontSize: 13, color: COLORS.inkSoft }}>No invoices found.</div>}
+
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.border}` }}>
+        {filtered.map((inv) => (
+          <button
+            key={inv.id}
+            onClick={() => setSelected(inv)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left card-hover"
+            style={{ background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}` }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, fontFamily: "IBM Plex Mono" }}>{inv.number}</div>
+              <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                {new Date(inv.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {" · "}
+                {inv.customerName || (inv.retroactive ? "Daily summary" : "Walk-in / no name")}
+                {" · "}
+                {inv.items.length} item{inv.items.length !== 1 ? "s" : ""}
+              </div>
+            </div>
+            <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 700, color: COLORS.maroonDark }}>Rs {fmt(inv.total)}</div>
+          </button>
+        ))}
       </div>
     </div>
   );
