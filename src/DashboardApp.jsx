@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { LayoutDashboard, ShoppingCart, UtensilsCrossed, TrendingUp, Receipt, Truck, FileText } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, UtensilsCrossed, TrendingUp, Receipt, Truck, FileText, Pencil, Trash2 } from "lucide-react";
 import { toast } from "./lib/toast";
 import logoIcon from "./assets/logo-icon.png";
 import logoFull from "./assets/logo-full.png";
@@ -298,6 +298,15 @@ export default function App() {
   const addInvoiceRecord = (invoice) => {
     setInvoices((inv) => [invoice, ...inv]);
   };
+  const updateInvoice = (id, fields) => {
+    setInvoices((inv) => inv.map((i) => (i.id === id ? { ...i, ...fields } : i)));
+    toast("Invoice updated");
+  };
+  const deleteInvoice = (id, number) => {
+    if (!confirmDelete(`Delete invoice ${number || ""}? This can't be undone.`)) return;
+    setInvoices((inv) => inv.filter((i) => i.id !== id));
+    toast("Invoice deleted");
+  };
 
   const priced = [];
   dishes.forEach((d) => (d.variants || []).forEach((v) => {
@@ -400,7 +409,7 @@ export default function App() {
               />
             )}
             {tab === "order" && <NewOrder dishes={dishes} zones={zones} addSale={addSale} addInvoiceRecord={addInvoiceRecord} />}
-            {tab === "invoices" && <InvoiceRecords invoices={invoices} sales={sales} addInvoiceRecord={addInvoiceRecord} />}
+            {tab === "invoices" && <InvoiceRecords invoices={invoices} sales={sales} dishes={dishes} addInvoiceRecord={addInvoiceRecord} updateInvoice={updateInvoice} deleteInvoice={deleteInvoice} />}
             {tab === "sales" && <DailySales dishes={dishes} sales={sales} addSale={addSale} deleteSale={deleteSale} expenses={expenses} addInvoiceRecord={addInvoiceRecord} />}
             {tab === "expenses" && <Expenses expenses={expenses} addExpense={addExpense} deleteExpense={deleteExpense} />}
             {tab === "delivery" && <Delivery zones={zones} updateZone={updateZone} deleteZone={deleteZone} addZone={addZone} />}
@@ -1217,9 +1226,10 @@ function InvoiceView({ invoice, onNewOrder, secondaryLabel = "Start New Order" }
   );
 }
 
-function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
+function InvoiceRecords({ invoices, sales, dishes, addInvoiceRecord, updateInvoice, deleteInvoice }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [generating, setGenerating] = useState(false);
 
   const sorted = [...invoices].sort((a, b) => {
@@ -1284,6 +1294,20 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
     toast(`Generated ${ordered.length} invoice(s) from past sales`);
   };
 
+  if (editing) {
+    return (
+      <InvoiceEditForm
+        invoice={editing}
+        dishes={dishes}
+        onCancel={() => setEditing(null)}
+        onSave={(fields) => {
+          updateInvoice(editing.id, fields);
+          setEditing(null);
+        }}
+      />
+    );
+  }
+
   if (selected) {
     return <InvoiceView invoice={selected} onNewOrder={() => setSelected(null)} secondaryLabel="Back to Invoices" />;
   }
@@ -1326,13 +1350,12 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
 
       <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.border}` }}>
         {filtered.map((inv) => (
-          <button
+          <div
             key={inv.id}
-            onClick={() => setSelected(inv)}
-            className="w-full flex items-center justify-between px-4 py-3 text-left card-hover"
+            className="w-full flex items-center justify-between px-4 py-3 card-hover"
             style={{ background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}` }}
           >
-            <div>
+            <button onClick={() => setSelected(inv)} className="flex-1 text-left min-w-0">
               <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, fontFamily: "IBM Plex Mono" }}>{inv.number}</div>
               <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
                 {new Date(inv.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
@@ -1341,10 +1364,191 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
                 {" · "}
                 {inv.items.length} item{inv.items.length !== 1 ? "s" : ""}
               </div>
+            </button>
+            <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+              <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700, color: COLORS.maroonDark }}>Rs {fmt(inv.total)}</span>
+              <button onClick={() => setEditing(inv)} title="Edit invoice" style={{ color: COLORS.gold }}>
+                <Pencil size={16} />
+              </button>
+              <button onClick={() => deleteInvoice(inv.id, inv.number)} title="Delete invoice" style={{ color: COLORS.rust }}>
+                <Trash2 size={16} />
+              </button>
             </div>
-            <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 700, color: COLORS.maroonDark }}>Rs {fmt(inv.total)}</div>
-          </button>
+          </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function InvoiceEditForm({ invoice, dishes, onCancel, onSave }) {
+  const [customerName, setCustomerName] = useState(invoice.customerName || "");
+  const [customerPhone, setCustomerPhone] = useState(invoice.customerPhone || "");
+  const [date, setDate] = useState(invoice.date);
+  const [items, setItems] = useState(invoice.items.map((it, idx) => ({ rowId: "r" + idx, ...it })));
+  const [delivery, setDelivery] = useState(String(invoice.delivery || 0));
+
+  const [dishId, setDishId] = useState(dishes?.[0]?.id || "");
+  const dish = (dishes || []).find((d) => d.id === dishId) || dishes?.[0];
+  const [variantId, setVariantId] = useState(dish?.variants?.[0]?.id || "");
+  const [qty, setQty] = useState(1);
+
+  const handleDishChange = (id) => {
+    setDishId(id);
+    const nd = (dishes || []).find((d) => d.id === id);
+    setVariantId(nd?.variants?.[0]?.id || "");
+  };
+  const variant = (dish?.variants || []).find((v) => v.id === variantId);
+
+  const updateItem = (rowId, field, value) => setItems((its) => its.map((it) => (it.rowId === rowId ? { ...it, [field]: value } : it)));
+  const removeItem = (rowId) => setItems((its) => its.filter((it) => it.rowId !== rowId));
+  const addItem = () => {
+    if (!dish || !variant || !qty || Number(qty) <= 0) return;
+    const s = variantStats(dish, variant);
+    setItems((its) => [
+      ...its,
+      {
+        rowId: "r" + Date.now() + Math.random(),
+        dishName: dish.name,
+        variantLabel: variant.label,
+        qty: Number(qty),
+        unitPrice: Number(variant.price) || 0,
+        unitCost: s.cost || 0,
+      },
+    ]);
+    setQty(1);
+  };
+
+  const subtotal = items.reduce((s, it) => s + Number(it.qty) * Number(it.unitPrice), 0);
+  const total = subtotal + (Number(delivery) || 0);
+
+  const handleSave = () => {
+    if (items.length === 0) {
+      toast("An invoice needs at least one item", "error");
+      return;
+    }
+    onSave({
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      date,
+      items: items.map(({ rowId, ...rest }) => rest),
+      subtotal,
+      delivery: Number(delivery) || 0,
+      total,
+    });
+  };
+
+  return (
+    <div>
+      <SectionHeader eyebrow="Editing" title={invoice.number} />
+
+      <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 12 }}>Order details</div>
+        <div className="flex flex-wrap gap-3">
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Date</div>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-lg text-sm" style={{ border: `1.5px solid ${COLORS.gold}`, fontFamily: "IBM Plex Mono" }} />
+          </div>
+          <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer name" className="px-3 py-2 rounded-lg text-sm" style={{ border: `1px solid ${COLORS.border}`, flex: 1, minWidth: 160 }} />
+          <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="px-3 py-2 rounded-lg text-sm" style={{ border: `1px solid ${COLORS.border}`, flex: 1, minWidth: 160 }} />
+        </div>
+      </div>
+
+      {dishes && dishes.length > 0 && (
+        <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.maroon, marginBottom: 12 }}>Add item</div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Dish</div>
+              <select value={dishId} onChange={(e) => handleDishChange(e.target.value)} className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, minWidth: 200 }}>
+                {CATEGORY_ORDER.map((cat) => (
+                  <optgroup key={cat} label={cat}>
+                    {dishes.filter((d) => d.category === cat).map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Option</div>
+              <select value={variantId} onChange={(e) => setVariantId(e.target.value)} className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, minWidth: 130 }}>
+                {(dish?.variants || []).map((v) => (
+                  <option key={v.id} value={v.id}>{v.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: COLORS.inkSoft, marginBottom: 4 }}>Qty</div>
+              <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className="px-2 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.border}`, width: 70, fontFamily: "IBM Plex Mono" }} />
+            </div>
+            <button onClick={addItem} className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: COLORS.maroon, color: "#F3EAD3" }}>
+              + Add item
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl overflow-hidden mb-6" style={{ border: `1px solid ${COLORS.border}` }}>
+        <div className="px-4 py-2 text-xs font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark }}>ITEMS</div>
+        {items.length === 0 && <div style={{ padding: 16, fontSize: 13, color: COLORS.inkSoft, background: COLORS.surface }}>No items — add at least one above.</div>}
+        {items.map((item) => (
+          <div key={item.rowId} className="flex items-center justify-between px-4 py-2.5 flex-wrap gap-2" style={{ borderTop: `1px solid ${COLORS.border}`, background: COLORS.surface, fontSize: 13 }}>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <div style={{ color: COLORS.ink }}>{item.dishName}</div>
+              <div style={{ fontSize: 11, color: COLORS.inkSoft }}>{item.variantLabel}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={item.qty}
+                onChange={(e) => updateItem(item.rowId, "qty", Number(e.target.value))}
+                className="px-2 py-1 rounded text-sm"
+                style={{ border: `1px solid ${COLORS.border}`, width: 60, fontFamily: "IBM Plex Mono" }}
+              />
+              <span style={{ color: COLORS.inkSoft }}>×</span>
+              <input
+                type="number"
+                value={item.unitPrice}
+                onChange={(e) => updateItem(item.rowId, "unitPrice", Number(e.target.value))}
+                className="px-2 py-1 rounded text-sm"
+                style={{ border: `1px solid ${COLORS.border}`, width: 80, fontFamily: "IBM Plex Mono" }}
+              />
+              <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 600, minWidth: 70, textAlign: "right" }}>Rs {fmt(item.qty * item.unitPrice)}</span>
+              <button onClick={() => removeItem(item.rowId)} style={{ color: COLORS.rust, fontSize: 15, fontWeight: 700 }}>×</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.goldFaint, border: `1px solid ${COLORS.gold}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <span style={{ fontSize: 13, color: COLORS.maroonDark }}>Subtotal</span>
+          <span style={{ fontFamily: "IBM Plex Mono", fontSize: 14 }}>Rs {fmt(subtotal)}</span>
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <span style={{ fontSize: 13, color: COLORS.maroonDark }}>Delivery</span>
+          <input
+            type="number"
+            value={delivery}
+            onChange={(e) => setDelivery(e.target.value)}
+            className="px-2 py-1 rounded text-sm text-right"
+            style={{ border: `1px solid ${COLORS.border}`, width: 90, fontFamily: "IBM Plex Mono" }}
+          />
+        </div>
+        <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px dashed ${COLORS.gold}` }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.maroonDark }}>Total</span>
+          <span style={{ fontFamily: "IBM Plex Mono", fontSize: 20, fontWeight: 700, color: COLORS.maroonDark }}>Rs {fmt(total)}</span>
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <button onClick={handleSave} className="flex-1 px-4 py-3 rounded-lg text-sm font-semibold" style={{ background: COLORS.maroon, color: "#F3EAD3" }}>
+          Save changes
+        </button>
+        <button onClick={onCancel} className="px-4 py-3 rounded-lg text-sm font-semibold" style={{ background: COLORS.surface, color: COLORS.inkSoft, border: `1px solid ${COLORS.border}` }}>
+          Cancel
+        </button>
       </div>
     </div>
   );
