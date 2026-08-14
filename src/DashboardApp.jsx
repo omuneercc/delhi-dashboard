@@ -401,7 +401,7 @@ export default function App() {
             )}
             {tab === "order" && <NewOrder dishes={dishes} zones={zones} addSale={addSale} addInvoiceRecord={addInvoiceRecord} />}
             {tab === "invoices" && <InvoiceRecords invoices={invoices} sales={sales} addInvoiceRecord={addInvoiceRecord} />}
-            {tab === "sales" && <DailySales dishes={dishes} sales={sales} addSale={addSale} deleteSale={deleteSale} expenses={expenses} />}
+            {tab === "sales" && <DailySales dishes={dishes} sales={sales} addSale={addSale} deleteSale={deleteSale} expenses={expenses} addInvoiceRecord={addInvoiceRecord} />}
             {tab === "expenses" && <Expenses expenses={expenses} addExpense={addExpense} deleteExpense={deleteExpense} />}
             {tab === "delivery" && <Delivery zones={zones} updateZone={updateZone} deleteZone={deleteZone} addZone={addZone} />}
           </div>
@@ -1233,42 +1233,55 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
 
   const totalAmount = invoices.reduce((s, inv) => s + (Number(inv.total) || 0), 0);
 
-  // find sales dates with no invoice covering them yet
-  const invoicedDates = new Set(invoices.map((i) => i.date));
-  const byDate = {};
-  sales.forEach((s) => {
-    if (!byDate[s.date]) byDate[s.date] = [];
-    byDate[s.date].push(s);
+  // a sale already has an invoice if some invoice references its id directly,
+  // or (for older New Order invoices before this tracking existed) if any invoice
+  // item matches it exactly on date+dish+option+qty+price
+  const coveredSaleIds = new Set(invoices.filter((inv) => inv.sourceSaleId).map((inv) => inv.sourceSaleId));
+  const looseCoveredKeys = new Set();
+  invoices.forEach((inv) => {
+    (inv.items || []).forEach((it) => {
+      looseCoveredKeys.add(`${inv.date}|${it.dishName}|${it.variantLabel}|${it.qty}|${it.unitPrice}`);
+    });
   });
-  const missingDates = Object.keys(byDate).filter((d) => !invoicedDates.has(d));
+  const usedKeys = new Set();
+  const missingSales = sales.filter((s) => {
+    if (coveredSaleIds.has(s.id)) return false;
+    const key = `${s.date}|${s.dishName}|${s.variantLabel}|${s.qty}|${s.unitPrice}`;
+    if (looseCoveredKeys.has(key) && !usedKeys.has(key)) {
+      // consume one match so duplicate sales with the same details aren't all skipped
+      usedKeys.add(key);
+      return false;
+    }
+    return true;
+  });
 
   const generateBackfill = async () => {
-    if (missingDates.length === 0) {
+    if (missingSales.length === 0) {
       toast("No sales history missing an invoice");
       return;
     }
     setGenerating(true);
-    const sortedDates = [...missingDates].sort();
-    for (const date of sortedDates) {
-      const entries = byDate[date];
+    const ordered = [...missingSales].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (const sale of ordered) {
       const seq = await nextInvoiceNumber();
-      const subtotal = entries.reduce((s, e) => s + e.qty * e.unitPrice, 0);
+      const subtotal = sale.qty * sale.unitPrice;
       addInvoiceRecord({
         id: "inv" + Date.now() + Math.random(),
         number: `DKZ-${String(seq).padStart(5, "0")}`,
-        date,
+        date: sale.date,
         time: "—",
         customerName: "",
         customerPhone: "",
-        items: entries.map((e) => ({ dishName: e.dishName, variantLabel: e.variantLabel, qty: e.qty, unitPrice: e.unitPrice, unitCost: e.unitCost })),
+        items: [{ dishName: sale.dishName, variantLabel: sale.variantLabel, qty: sale.qty, unitPrice: sale.unitPrice, unitCost: sale.unitCost }],
         subtotal,
         delivery: 0,
         total: subtotal,
         retroactive: true,
+        sourceSaleId: sale.id,
       });
     }
     setGenerating(false);
-    toast(`Generated ${sortedDates.length} invoice(s) from past sales`);
+    toast(`Generated ${ordered.length} invoice(s) from past sales`);
   };
 
   if (selected) {
@@ -1284,11 +1297,11 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
         <Card label="Total invoiced" value={`Rs ${fmt(totalAmount)}`} />
       </div>
 
-      {missingDates.length > 0 && (
+      {missingSales.length > 0 && (
         <div className="p-4 rounded-xl mb-6" style={{ background: COLORS.goldFaint, border: `1px solid ${COLORS.gold}` }}>
           <div style={{ fontSize: 13, color: COLORS.maroonDark, marginBottom: 8 }}>
-            You have sales logged on <strong>{missingDates.length}</strong> day(s) with no invoice on record — likely from before invoices were tracked, or sales logged directly without going through New Order.
-            Generating one will create a daily summary invoice for each (no customer name, since that wasn't captured for these).
+            You have <strong>{missingSales.length}</strong> sale{missingSales.length !== 1 ? "s" : ""} logged with no invoice on record — likely from before invoices were tracked, or logged directly without going through New Order.
+            Generating will create one invoice per sale (no customer name, since that wasn't captured for these).
           </div>
           <button
             onClick={generateBackfill}
@@ -1296,7 +1309,7 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
             className="px-4 py-2 rounded-lg text-sm font-semibold"
             style={{ background: COLORS.maroon, color: "#F3EAD3" }}
           >
-            {generating ? "Generating…" : `Generate ${missingDates.length} invoice(s) from past sales`}
+            {generating ? "Generating…" : `Generate ${missingSales.length} invoice(s) from past sales`}
           </button>
         </div>
       )}
@@ -1324,7 +1337,7 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
               <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
                 {new Date(inv.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                 {" · "}
-                {inv.customerName || (inv.retroactive ? "Daily summary" : "Walk-in / no name")}
+                {inv.customerName || (inv.retroactive ? "From sales history" : "Walk-in / no name")}
                 {" · "}
                 {inv.items.length} item{inv.items.length !== 1 ? "s" : ""}
               </div>
@@ -1337,7 +1350,7 @@ function InvoiceRecords({ invoices, sales, addInvoiceRecord }) {
   );
 }
 
-function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
+function DailySales({ dishes, sales, addSale, deleteSale, expenses, addInvoiceRecord }) {
   const [date, setDate] = useState(todayStr());
   const [dishId, setDishId] = useState(dishes[0]?.id || "");
   const selectedDish = dishes.find((d) => d.id === dishId) || dishes[0];
@@ -1355,17 +1368,38 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
     setVariantId(nd?.variants?.[0]?.id || "");
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!currentDish || !currentVariant || !qty || Number(qty) <= 0) return;
     const s = variantStats(currentDish, currentVariant);
-    addSale({
+    const saleId = "s" + Date.now() + Math.random();
+    const entry = {
+      id: saleId,
       date,
       dishName: currentDish.name,
       variantLabel: currentVariant.label,
       qty: Number(qty),
       unitPrice: Number(currentVariant.price) || 0,
       unitCost: s.cost || 0,
+    };
+    addSale(entry, { silent: true });
+    const seq = await nextInvoiceNumber();
+    const invNumber = `DKZ-${String(seq).padStart(5, "0")}`;
+    const subtotal = entry.qty * entry.unitPrice;
+    addInvoiceRecord({
+      id: "inv" + Date.now() + Math.random(),
+      number: invNumber,
+      date,
+      time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+      customerName: "",
+      customerPhone: "",
+      items: [{ dishName: entry.dishName, variantLabel: entry.variantLabel, qty: entry.qty, unitPrice: entry.unitPrice, unitCost: entry.unitCost }],
+      subtotal,
+      delivery: 0,
+      total: subtotal,
+      retroactive: false,
+      sourceSaleId: saleId,
     });
+    toast(`Sale logged · Invoice ${invNumber} created`);
     setQty(1);
   };
 
