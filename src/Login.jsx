@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import logoIcon from "./assets/logo-icon.png";
 
 const COLORS = {
   bg: "#FAF6EE",
@@ -64,11 +65,10 @@ export default function Login({ notice }) {
           width: 340,
         }}
       >
-        <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.maroonDark, marginBottom: 2 }}>
-          Delhi k Zaiqay
-        </div>
-        <div style={{ fontSize: 12, color: COLORS.gold, letterSpacing: 1.5, marginBottom: 20 }}>
-          ADMIN DASHBOARD
+        <div className="flex flex-col items-center text-center" style={{ marginBottom: 8 }}>
+          <img src={logoIcon} alt="Delhi k Zaiqay" style={{ height: 52, width: "auto", marginBottom: 6 }} />
+          <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.maroonDark }}>Delhi k Zaiqay</div>
+          <div style={{ fontSize: 11, color: COLORS.gold, letterSpacing: 1.5, marginBottom: 12 }}>ADMIN DASHBOARD</div>
         </div>
 
         <label style={{ fontSize: 12, color: COLORS.inkSoft }}>Email</label>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { LayoutDashboard, ShoppingCart, UtensilsCrossed, TrendingUp, Receipt, Truck } from "lucide-react";
 import { toast } from "./lib/toast";
+import logoIcon from "./assets/logo-icon.png";
+import logoFull from "./assets/logo-full.png";
 
 const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
@@ -331,7 +333,7 @@ export default function App() {
       {/* Mobile top bar */}
       <div className="flex md:hidden items-center justify-between px-4 py-3 sticky top-0 z-20" style={{ background: COLORS.maroonDark }}>
         <div className="flex items-center gap-2">
-          <ArchIcon size={24} color={COLORS.gold} />
+          <img src={logoIcon} alt="Delhi k Zaiqay" style={{ height: 30, width: "auto" }} />
           <div style={{ fontFamily: "Cormorant Garamond", fontStyle: "italic", fontWeight: 700, fontSize: 17, color: "#FBF3E1" }}>
             Delhi k Zaiqay
           </div>
@@ -347,7 +349,7 @@ export default function App() {
         {/* Desktop sidebar */}
         <div className="hidden md:flex md:flex-col gap-1 p-5" style={{ width: 230, background: COLORS.maroonDark, flexShrink: 0 }}>
           <div className="flex items-center gap-2 mb-1 px-1">
-            <ArchIcon size={30} color={COLORS.gold} />
+            <img src={logoIcon} alt="Delhi k Zaiqay" style={{ height: 38, width: "auto" }} />
             <div>
               <div style={{ fontFamily: "Cormorant Garamond", fontStyle: "italic", fontWeight: 700, fontSize: 20, color: "#FBF3E1", lineHeight: 1.1 }}>Delhi k Zaiqay</div>
               <div style={{ fontSize: 10, color: COLORS.gold, letterSpacing: 1.5 }}>ADMIN DASHBOARD</div>
@@ -612,15 +614,15 @@ function MenuCosting({
 
                     {isOpen && (
                       <div style={{ background: COLORS.bg, padding: "14px 16px" }}>
-                        <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-4 min-w-0">
                           {/* Ingredients — entered once */}
-                          <div className="rounded-lg" style={{ border: `1px solid ${COLORS.border}`, background: COLORS.surface, maxWidth: 560 }}>
+                          <div className="rounded-lg min-w-0" style={{ border: `1px solid ${COLORS.border}`, background: COLORS.surface, maxWidth: 560 }}>
                             <div className="px-3 py-2 text-xs font-semibold" style={{ background: COLORS.goldFaint, color: COLORS.maroonDark, borderBottom: `1px solid ${COLORS.border}` }}>
                               INGREDIENTS (entered once for this recipe)
                             </div>
-                            <div className="px-3 pt-2">
+                            <div className="px-3 pt-2 min-w-0">
                               {(d.ingredients || []).length === 0 && <div style={{ fontSize: 12, color: COLORS.inkSoft, padding: "6px 2px" }}>No ingredients yet.</div>}
-                              <div style={{ overflowX: "auto" }}>
+                              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
                                 <div style={{ minWidth: 420 }}>
                                   {(d.ingredients || []).length > 0 && (
                                     <div className="grid text-xs font-semibold px-3 py-1" style={{ gridTemplateColumns: "1.6fr 1fr 1fr 28px", color: COLORS.inkSoft }}>
@@ -676,7 +678,7 @@ function MenuCosting({
                           </div>
 
                           {/* Pricing options */}
-                          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto" }}>
+                          <div className="rounded-lg overflow-hidden min-w-0" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
                             <div style={{ minWidth: 680 }}>
                               <div
                                 className="grid text-xs font-semibold px-3 py-2 items-center"
@@ -760,7 +762,7 @@ function Delivery({ zones, updateZone, deleteZone, addZone }) {
       <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
         Charged per order based on delivery distance. Adjust the ranges and rates below.
       </div>
-      <div className="rounded-xl mb-4" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto" }}>
+      <div className="rounded-xl mb-4 min-w-0" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
         <div style={{ minWidth: 480 }}>
           <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 40px", background: COLORS.goldFaint, color: COLORS.maroonDark }}>
             <div>Zone label</div>
@@ -831,7 +833,7 @@ function PeriodCard({ period }) {
           {period.dishBreakdown.length === 0 ? (
             <div style={{ fontSize: 12, color: COLORS.inkSoft }}>No sales this period.</div>
           ) : (
-            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto" }}>
+            <div className="rounded-lg overflow-hidden min-w-0" style={{ border: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
               <div style={{ minWidth: 460 }}>
                 <div className="grid text-xs font-semibold px-3 py-2" style={{ gridTemplateColumns: "2fr 0.7fr 1fr 1fr", background: COLORS.goldFaint, color: COLORS.maroonDark }}>
                   <div>Dish · Option</div>
@@ -1127,11 +1129,7 @@ function InvoiceView({ invoice, onNewOrder }) {
         }}
       >
         <div className="flex flex-col items-center text-center mb-4">
-          <ArchIcon size={36} color={COLORS.gold} />
-          <div style={{ fontFamily: "Cormorant Garamond", fontStyle: "italic", fontWeight: 700, fontSize: 24, color: COLORS.maroonDark, marginTop: 4 }}>
-            Delhi k Zaiqay
-          </div>
-          <div style={{ fontSize: 10, color: COLORS.gold, letterSpacing: 2 }}>CATERING · GOOD FOOD · GREAT MEMORIES</div>
+          <img src={logoFull} alt="Delhi k Zaiqay" style={{ width: "70%", maxWidth: 260, height: "auto" }} />
         </div>
 
         <div style={{ borderTop: `1px dashed ${COLORS.border}`, borderBottom: `1px dashed ${COLORS.border}`, padding: "10px 0", marginBottom: 14 }}>
@@ -1420,7 +1418,7 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
                   </div>
                 </div>
                 {entries.length > 0 && (
-                  <div style={{ overflowX: "auto" }}>
+                  <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
                     <div style={{ minWidth: 620 }}>
                       <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "2fr 1fr 0.7fr 1fr 1fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
                         <div>Dish</div>
@@ -1446,7 +1444,7 @@ function DailySales({ dishes, sales, addSale, deleteSale, expenses }) {
                   </div>
                 )}
                 {dayExpenses.length > 0 && (
-                  <div style={{ overflowX: "auto" }}>
+                  <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
                     <div style={{ minWidth: 420 }}>
                       <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.rustBg, color: COLORS.rust }}>
                         <div>Expense category</div>
@@ -1601,7 +1599,7 @@ function Expenses({ expenses, addExpense, deleteExpense }) {
               </div>
               <div style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: COLORS.maroonDark }}>Rs {fmt(dayTotal)} spent</div>
             </div>
-            <div style={{ overflowX: "auto" }}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
               <div style={{ minWidth: 420 }}>
                 <div className="grid text-xs font-semibold px-4 py-2" style={{ gridTemplateColumns: "1.3fr 1.6fr 1fr 26px", background: COLORS.bg, color: COLORS.inkSoft }}>
                   <div>Category</div>

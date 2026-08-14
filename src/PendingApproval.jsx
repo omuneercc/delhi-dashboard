@@ -1,4 +1,5 @@
 import { supabase } from "./lib/supabaseClient";
+import logoIcon from "./assets/logo-icon.png";
 
 const COLORS = {
   bg: "#FAF6EE",
@@ -34,6 +35,7 @@ export default function PendingApproval({ email }) {
           textAlign: "center",
         }}
       >
+        <img src={logoIcon} alt="Delhi k Zaiqay" style={{ height: 48, width: "auto", margin: "0 auto 12px" }} />
         <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.maroonDark, marginBottom: 4 }}>
           Waiting for approval
         </div>
